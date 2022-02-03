@@ -3,6 +3,7 @@
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <memory>
 #include <type_traits>
 #include <utility>
@@ -26,7 +27,14 @@ namespace serialpp {
     using ListSizeType = std::uint16_t;
 
 
-    // Variable-length homogeneous array.
+    // Safely casts to ListSizeType.
+    ListSizeType to_list_size(std::size_t offset) {
+        assert(std::cmp_less_equal(offset, std::numeric_limits<ListSizeType>::max()));
+        return static_cast<ListSizeType>(offset);
+    }
+
+
+    // Variable-length homogeneous array. Can hold up to 2^16 - 1 elements.
     template<typename T>
     struct List {
         using SizeType = ListSizeType;
@@ -98,9 +106,9 @@ namespace serialpp {
             auto const [new_target, element_count] = source._range->visit(visitor);
 
             return new_target.push_fixed_field<ListSizeType>([element_count](SerialiseTarget size_target) {
-                return Serialiser<ListSizeType>{}(element_count, size_target);
+                return Serialiser<ListSizeType>{}(to_list_size(element_count), size_target);
             }).push_fixed_field<DataOffset>([relative_variable_offset](SerialiseTarget offset_target) {
-                return Serialiser<DataOffset>{}(relative_variable_offset, offset_target);
+                return Serialiser<DataOffset>{}(to_data_offset(relative_variable_offset), offset_target);
             });
         }
     };

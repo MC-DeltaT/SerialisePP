@@ -5,7 +5,9 @@
 #include <cstddef>
 #include <cstdint>
 #include <climits>
+#include <limits>
 #include <span>
+#include <utility>
 #include <vector>
 
 #include "utility.hpp"
@@ -22,6 +24,13 @@ namespace serialpp {
 
     // Used for variable data offsets.
     using DataOffset = std::uint16_t;
+
+
+    // Safely casts to DataOffset.
+    DataOffset to_data_offset(std::size_t offset) {
+        assert(std::cmp_less_equal(offset, std::numeric_limits<DataOffset>::max()));
+        return static_cast<DataOffset>(offset);
+    }
 
 
     // The size in bytes of the fixed data section of a serialisable type (as an std::integral_constant).
