@@ -67,8 +67,8 @@ namespace serialpp {
         template<class Tag>
         decltype(auto) get() const {
             using TagList = TypeList<Tags...>;
-            constexpr auto Index = TYPE_LIST_INDEX<TagList, Tag>;
-            return std::get<Index>(*this);
+            constexpr auto index = TYPE_LIST_INDEX<TagList, Tag>;
+            return std::get<index>(*this);
         }
     };
 
