@@ -4,7 +4,7 @@
 
 #include <serialpp/utility.hpp>
 
-#include "test.hpp"
+#include "helpers/test.hpp"
 
 
 namespace serialpp::test {

@@ -99,8 +99,7 @@ namespace serialpp {
     template<typename T>
     struct Serialiser<List<T>> {
         SerialiseTarget operator()(SerialiseSource<List<T>> const& source, SerialiseTarget target) const {
-            assert(target.field_variable_offset >= target.fixed_size);
-            auto const relative_variable_offset = target.field_variable_offset - target.fixed_size;
+            auto const relative_variable_offset = target.relative_field_variable_offset();
 
             typename SerialiseSource<List<T>>::Visitor const visitor{target};
             auto const [new_target, element_count] = source._range->visit(visitor);

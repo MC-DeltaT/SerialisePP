@@ -69,7 +69,7 @@ namespace serialpp {
     struct SerialiseSource;
 
 
-    struct SerialiseTarget;
+    class SerialiseTarget;
 
 
     template<typename T>
@@ -94,7 +94,7 @@ namespace serialpp {
         SerialiseTarget initialise_for() {
             constexpr auto fixed_size = FIXED_DATA_SIZE<T>;
             _data.resize(fixed_size);
-            return {this, fixed_size, 0, fixed_size, fixed_size};
+            return {*this, fixed_size, 0, fixed_size, fixed_size};
         }
 
         // Adds more space to the end of the buffer.
@@ -118,29 +118,45 @@ namespace serialpp {
 
     // Helper for serialising into a SerialiseBuffer.
     // Keeps track of positions in the buffer which the current value should be serialised into (i.e. for complex types).
-    struct SerialiseTarget {
-        SerialiseBuffer* buffer;
-        std::size_t fixed_size;				// Size of fixed data section
-        std::size_t field_fixed_offset;     // Offset of current field from start of buffer.
-        std::size_t field_fixed_size;		// Size of current field's fixed data.
-        std::size_t field_variable_offset;	// Offset of current field from start of buffer.
+    class SerialiseTarget {
+    public:
+        SerialiseTarget(SerialiseBuffer& buffer, std::size_t fixed_size, std::size_t field_fixed_offset,
+                std::size_t field_fixed_size, std::size_t field_variable_offset) :
+            _buffer{&buffer}, _fixed_size{fixed_size}, _field_fixed_offset{field_fixed_offset},
+            _field_fixed_size{field_fixed_size}, _field_variable_offset{field_variable_offset}
+        {
+            auto const buffer_size = buffer.span().size();
+            assert(fixed_size <= buffer_size);
+            assert(field_fixed_offset + field_fixed_size <= buffer_size);
+            assert(field_variable_offset >= fixed_size);
+            assert(field_variable_offset <= buffer_size);
+        }
 
         // Gets the buffer for the current field's fixed data.
         MutableBytesView field_fixed_data() const {
-            assert(field_fixed_offset + field_fixed_size <= buffer->span().size());
-            return buffer->span().subspan(field_fixed_offset).first(field_fixed_size);
+            assert(_field_fixed_offset + _field_fixed_size <= _buffer->span().size());
+            return _buffer->span().subspan(_field_fixed_offset).first(_field_fixed_size);
+        }
+
+        // Gets the offset of the current field's variable data relative to the end of the fixed data.
+        std::size_t relative_field_variable_offset() const {
+            assert(_field_variable_offset >= _fixed_size);
+            return _field_variable_offset - _fixed_size;
         }
 
         // Invokes func with a SerialiseTarget set up for a field of type T in the fixed data section.
         // Returns a SerialiseTarget set up for the next serialisation.
         template<Serialisable T>
         SerialiseTarget push_fixed_field(Callable<SerialiseTarget, SerialiseTarget> auto&& func) const {
-            constexpr auto field_fixed_size = FIXED_DATA_SIZE<T>;
+            constexpr auto new_field_fixed_size = FIXED_DATA_SIZE<T>;
             auto target = *this;
-            target.field_fixed_size = field_fixed_size;
+            target._field_fixed_size = new_field_fixed_size;
             target = func(target);
-            // Note: recalculate exact fixed offset to avoid incrementing it multiple times for 1 field.
-            target.field_fixed_offset = field_fixed_offset + field_fixed_size;
+            // Note: recalculate exact fixed offset and size to avoid changing it multiple times for the same field when
+            // nesting push_fixed_field() calls.
+            target._field_fixed_offset = _field_fixed_offset + new_field_fixed_size;
+            assert(_field_fixed_size >= new_field_fixed_size);
+            target._field_fixed_size = _field_fixed_size - new_field_fixed_size;
             return target;
         }
 
@@ -148,26 +164,35 @@ namespace serialpp {
         // Returns a SerialiseTarget set up for the next serialisation.
         template<Serialisable T>
         SerialiseTarget push_variable_field(Callable<SerialiseTarget, SerialiseTarget> auto&& func) const {
-            constexpr auto field_fixed_size = FIXED_DATA_SIZE<T>;
+            constexpr auto new_field_fixed_size = FIXED_DATA_SIZE<T>;
 
-            assert(buffer->span().size() >= field_variable_offset);
-            auto const free_variable_buffer = buffer->span().size() - field_variable_offset;
-            if (free_variable_buffer < field_fixed_size) {
-                buffer->extend(field_fixed_size - free_variable_buffer);
+            assert(_buffer->span().size() >= _field_variable_offset);
+            auto const free_variable_buffer = _buffer->span().size() - _field_variable_offset;
+            if (free_variable_buffer < new_field_fixed_size) {
+                _buffer->extend(new_field_fixed_size - free_variable_buffer);
             }
 
             auto target = *this;
-            target.field_fixed_offset = field_variable_offset;
-            target.field_fixed_size = field_fixed_size;
-            target.field_variable_offset = field_variable_offset + field_fixed_size;
+            target._field_fixed_offset = _field_variable_offset;
+            target._field_fixed_size = new_field_fixed_size;
+            target._field_variable_offset = _field_variable_offset + new_field_fixed_size;
             target = func(target);
 
             // All subfield data went into the variable data section and not the fixed data section,
             // so we revert the fixed section but keep the new variable section.
             auto result = *this;
-            result.field_variable_offset = target.field_variable_offset;
+            result._field_variable_offset = target._field_variable_offset;
             return result;
         }
+
+        friend auto operator<=>(SerialiseTarget const& lhs, SerialiseTarget const& rhs) = default;
+    
+    private:
+        SerialiseBuffer* _buffer;
+        std::size_t _fixed_size;            // Size of fixed data section
+        std::size_t _field_fixed_offset;    // Offset of current field from start of buffer.
+        std::size_t _field_fixed_size;		// Size of current field's fixed data.
+        std::size_t _field_variable_offset;	// Offset of current field from start of buffer.
     };
 
 }

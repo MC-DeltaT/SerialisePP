@@ -32,8 +32,7 @@ namespace serialpp {
     struct Serialiser<Optional<T>> {
         SerialiseTarget operator()(SerialiseSource<Optional<T>> const& source, SerialiseTarget target) const {
             if (source.has_value()) {
-                assert(target.field_variable_offset >= target.fixed_size);
-                auto const relative_variable_offset = target.field_variable_offset - target.fixed_size;
+                auto const relative_variable_offset = target.relative_field_variable_offset();
                 return target.push_fixed_field<DataOffset>([relative_variable_offset](SerialiseTarget offset_target) {
                     auto const offset = to_data_offset(relative_variable_offset + 1);
                     return Serialiser<DataOffset>{}(offset, offset_target);
