@@ -1,19 +1,21 @@
 #pragma once
 
+#include <algorithm>
 #include <concepts>
 #include <cstddef>
-#include <tuple>
+#include <string_view>
 #include <type_traits>
+#include <utility>
 
 
 namespace serialpp {
 
-    template<std::size_t V>
-    using SizeTConstant = std::integral_constant<std::size_t, V>;
+    template<std::size_t Value>
+    using SizeTConstant = std::integral_constant<std::size_t, Value>;
 
 
-    template<typename T, typename R, typename... Args>
-    concept Callable = std::invocable<T, Args...> && std::same_as<R, std::invoke_result_t<T, Args...>>;
+    template<typename T, typename Return, typename... Args>
+    concept Callable = std::invocable<T, Args...> && std::same_as<Return, std::invoke_result_t<T, Args...>>;
 
 
     template<typename... Ts>
@@ -29,46 +31,103 @@ namespace serialpp {
     };
 
 
-    // Used to create a TypeList with types from a list of values.
-    template<typename... Ts>
-    TypeList<std::remove_cvref_t<Ts>...> make_type_list(Ts&&...);
+    // Fixed-length string for use as template arguments at compile time.
+    template<std::size_t N>
+    struct ConstantString {
+        char data[N] = {};
+
+        constexpr ConstantString(char const (&str)[N + 1]) {
+            std::copy_n(str, N, data);
+        }
+        
+        constexpr std::string_view string_view() const {
+            return {data, N};
+        }
+    };
+
+    // Deduction guide to trim off null terminator from a string literal.
+    template<std::size_t N>
+    ConstantString(char const (&)[N]) -> ConstantString<N - 1>;
 
 
-    // Obtains the index of the first occurrence of a type T in a TypeList L (as an std::integral_constant).
-    // If L does not contain T then a compile error will occur.
-    template<class L, typename T>
-    struct TypeListIndex
-        : SizeTConstant<1 + TypeListIndex<typename L::Tail, T>{}> {};
-
-    template<class L>
-    struct TypeListIndex<L, typename L::Head> : SizeTConstant<0> {};
-
-    // Obtains the index of the first occurrence of a type T in a TypeList L.
-    template<class L, typename T>
-    static inline constexpr auto TYPE_LIST_INDEX = TypeListIndex<L, T>::value;
+    template<std::size_t N1, std::size_t N2>
+    constexpr bool operator==(ConstantString<N1> const& lhs, ConstantString<N2> const& rhs) {
+        return lhs.string_view() == rhs.string_view();
+    }
 
 
-    template<typename T, typename TagT>
-    struct TaggedType {
+    // Element of a NamedTuple.
+    template<ConstantString Name, typename T>
+    struct NamedTupleElement {
         using Type = T;
-        using Tag = TagT;
+
+        T value;
+
+        static inline constexpr ConstantString NAME = Name;
     };
 
 
-    // Like std::tuple, but each element type is associated with a "tag" type which may be used as an indexer.
-    template<class... Tags>
-    struct TaggedTuple;
+    template<typename T>
+    struct IsNamedTupleElement : std::bool_constant<
+        requires { requires std::derived_from<T, NamedTupleElement<T::NAME, typename T::Type>>; }
+    > {};
 
-    template<typename... Types, typename... Tags>
-    struct TaggedTuple<TaggedType<Types, Tags>...> : std::tuple<Types...> {
-        using std::tuple<Types...>::tuple;
 
-        // Gets an element by its tag type.
-        template<class Tag>
-        decltype(auto) get() const {
-            using TagList = TypeList<Tags...>;
-            constexpr auto index = TYPE_LIST_INDEX<TagList, Tag>;
-            return std::get<index>(*this);
+    namespace impl {
+
+        template<ConstantString Name, typename T>
+        constexpr auto&& named_tuple_get(NamedTupleElement<Name, T>& tuple) noexcept {
+            return tuple.value;
+        }
+
+        template<ConstantString Name, typename T>
+        constexpr auto&& named_tuple_get(NamedTupleElement<Name, T> const& tuple) noexcept {
+            return tuple.value;
+        }
+
+
+        template<ConstantString Name, typename T>
+        T named_tuple_element_type(NamedTupleElement<Name, T> const& tuple);
+
+    }
+
+
+    // Checks if a NamedTuple has an element with a specified name.
+    template<class Tuple, ConstantString Name>
+    struct NamedTupleHasElement : std::bool_constant<requires {
+        impl::named_tuple_element_type<Name>(std::declval<Tuple>());
+    }> {};
+
+
+    // Gets the type of the NamedTuple element with the specified name.
+    // If there is no element with that name, a compile error occurs.
+    template<class Tuple, ConstantString Name> requires NamedTupleHasElement<Tuple, Name>::value
+    using NamedTupleElementType = decltype(impl::named_tuple_element_type<Name>(std::declval<Tuple>()));
+
+
+    // A tuple where each element is associated with a name given by a ConstantString.
+    // Inspired by "Beyond struct: Meta-programming a struct Replacement in C++20" by John Bandela: https://youtu.be/FXfrojjIo80
+    template<class... Es> requires (IsNamedTupleElement<Es>::value && ...)
+    struct NamedTuple : Es...  {
+        using Elements = TypeList<Es...>;
+
+        constexpr NamedTuple() = default;
+
+        template<typename... Args> requires (sizeof...(Args) == sizeof...(Es))
+        constexpr NamedTuple(Args&&... args) :
+            Es{std::forward<Args>(args)}...
+        {}
+
+        // Gets an element by name.
+        template<ConstantString Name>
+        constexpr auto&& get() noexcept requires NamedTupleHasElement<NamedTuple, Name>::value {
+            return impl::named_tuple_get<Name>(*this);
+        }
+
+        // Gets an element by name.
+        template<ConstantString Name>
+        constexpr auto&& get() const noexcept requires NamedTupleHasElement<NamedTuple, Name>::value {
+            return impl::named_tuple_get<Name>(*this);
         }
     };
 

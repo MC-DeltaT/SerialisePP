@@ -35,16 +35,18 @@ namespace serialpp {
 
 
     // Variable-length homogeneous array. Can hold up to 2^16 - 1 elements.
-    template<typename T>
+    template<Serialisable T>
     struct List {
         using SizeType = ListSizeType;
     };
 
-    template<typename T>
+
+    template<Serialisable T>
     struct FixedDataSize<List<T>>
         : SizeTConstant<FIXED_DATA_SIZE<ListSizeType> + FIXED_DATA_SIZE<DataOffset>> {};
 
-    template<typename T>
+
+    template<Serialisable T>
     class SerialiseSource<List<T>> {
     public:
         // TODO: does this really need type erasure?
@@ -96,7 +98,7 @@ namespace serialpp {
         friend struct Serialiser<List<T>>;
     };
 
-    template<typename T>
+    template<Serialisable T>
     struct Serialiser<List<T>> {
         SerialiseTarget operator()(SerialiseSource<List<T>> const& source, SerialiseTarget target) const {
             auto const relative_variable_offset = target.relative_field_variable_offset();
@@ -112,7 +114,7 @@ namespace serialpp {
         }
     };
 
-    template<typename T>
+    template<Serialisable T>
     struct Deserialiser<List<T>> : DeserialiserBase {
         using DeserialiserBase::DeserialiserBase;
 

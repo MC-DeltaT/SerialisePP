@@ -19,16 +19,19 @@ namespace serialpp {
 
 
     // Serialisable type which contains either 0 or 1 instance of a type.
-    template<typename T>
+    template<Serialisable T>
     struct Optional {};
 
-    template<typename T>
+
+    template<Serialisable T>
     struct FixedDataSize<Optional<T>> : FixedDataSize<DataOffset> {};
 
-    template<typename T>
+
+    template<Serialisable T>
     struct SerialiseSource<Optional<T>> : std::optional<SerialiseSource<T>> {};
 
-    template<typename T>
+
+    template<Serialisable T>
     struct Serialiser<Optional<T>> {
         SerialiseTarget operator()(SerialiseSource<Optional<T>> const& source, SerialiseTarget target) const {
             if (source.has_value()) {
@@ -48,7 +51,8 @@ namespace serialpp {
         }
     };
 
-    template<typename T>
+
+    template<Serialisable T>
     struct Deserialiser<Optional<T>> : DeserialiserBase {
         using DeserialiserBase::DeserialiserBase;
 
