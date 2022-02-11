@@ -1,6 +1,7 @@
 #pragma once
 
 #include <concepts>
+#include <cstddef>
 #include <cstdint>
 #include <type_traits>
 
@@ -12,23 +13,52 @@ namespace serialpp {
 
     // Fundamental type. Has no variable data.
     template<typename T>
-    concept Scalar = std::integral<T>;
+    concept Scalar = std::integral<T> || std::same_as<T, std::byte>;
 
 
     template<Scalar S>
     struct SerialiseSource<S> {
         S value;
 
-        SerialiseSource(S value) :
+        constexpr SerialiseSource(S value) noexcept :
             value{value}
         {}
 
-        operator S&() {
+        constexpr operator S&() noexcept {
             return value;
         }
 
-        operator S const&() const {
+        constexpr operator S const&() const noexcept {
             return value;
+        }
+    };
+
+
+    /*
+        Byte:
+            Represented as-is, as 8 bits.
+    */
+
+    template<>
+    struct FixedDataSize<std::byte> : SizeTConstant<1> {};
+
+    template<>
+    struct Serialiser<std::byte> {
+        SerialiseTarget operator()(SerialiseSource<std::byte> source, SerialiseTarget target) const {
+            auto const buffer = target.field_fixed_data();
+            assert(buffer.size() >= 1);
+            buffer[0] = source.value;
+            return target;
+        }
+    };
+
+    template<>
+    struct Deserialiser<std::byte> : DeserialiserBase {
+        using DeserialiserBase::DeserialiserBase;
+
+        std::byte value() const {
+            assert(fixed_data.size() >= 1);
+            return fixed_data[0];
         }
     };
 

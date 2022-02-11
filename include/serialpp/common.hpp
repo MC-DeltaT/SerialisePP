@@ -27,7 +27,7 @@ namespace serialpp {
 
 
     // Safely casts to DataOffset.
-    DataOffset to_data_offset(std::size_t offset) {
+    inline DataOffset to_data_offset(std::size_t offset) {
         assert(std::cmp_less_equal(offset, std::numeric_limits<DataOffset>::max()));
         return static_cast<DataOffset>(offset);
     }
@@ -194,5 +194,24 @@ namespace serialpp {
         std::size_t _field_fixed_size;		// Size of current field's fixed data.
         std::size_t _field_variable_offset;	// Offset of current field from start of buffer.
     };
+
+
+    // Serialises an entire object.
+    template<Serialisable T>
+    void serialise(SerialiseSource<T> const& source, SerialiseBuffer& buffer) {
+        auto const target = buffer.initialise_for<T>();
+        Serialiser<T>{}(source, target);
+    }
+
+
+    // Obtains a deserialiser for a type.
+    // buffer should contain exactly an instance of T (i.e. you can only use this function to deserialise the result of
+    // serialising an entire object with serialise()).
+    template<Serialisable T>
+    Deserialiser<T> deserialise(ConstBytesView buffer) {
+        constexpr auto fixed_size = FIXED_DATA_SIZE<T>;
+        assert(buffer.size() >= fixed_size);
+        return Deserialiser<T>{buffer.first(fixed_size), buffer.subspan(fixed_size)};
+    }
 
 }

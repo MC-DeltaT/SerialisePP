@@ -28,7 +28,7 @@ namespace serialpp {
 
 
     // Safely casts to ListSizeType.
-    ListSizeType to_list_size(std::size_t offset) {
+    inline ListSizeType to_list_size(std::size_t offset) {
         assert(std::cmp_less_equal(offset, std::numeric_limits<ListSizeType>::max()));
         return static_cast<ListSizeType>(offset);
     }

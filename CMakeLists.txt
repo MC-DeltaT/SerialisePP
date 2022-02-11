@@ -9,6 +9,7 @@ target_include_directories(SerialisePP INTERFACE include/)
 
 add_executable(SerialisePPTest
     test/test_common.cpp
+    test/test_scalar.cpp
     test/test_utility.cpp
 )
 target_include_directories(SerialisePPTest PRIVATE test/)

@@ -3,7 +3,7 @@
 
 #include <serialpp/common.hpp>
 
-#include "helpers/dummy_serialisable.hpp"
+#include "helpers/common.hpp"
 #include "helpers/test.hpp"
 
 
@@ -22,7 +22,7 @@ namespace serialpp::test {
 
     STEST_CASE(SerialiseBuffer_InitialiseFor) {
         SerialiseBuffer buffer;
-        auto const target = buffer.initialise_for<DummySerialisable<8>>();
+        auto const target = buffer.initialise_for<MockSerialisable<8>>();
 
         SerialiseTarget const expected_target{buffer, 8, 0, 8, 8};
         test_assert(target == expected_target);
@@ -70,7 +70,7 @@ namespace serialpp::test {
         SerialiseTarget const target{buffer, 60, 20, 10, 80};
 
         bool func_called = false;
-        auto const new_target = target.push_fixed_field<DummySerialisable<4>>(
+        auto const new_target = target.push_fixed_field<MockSerialisable<4>>(
             [&func_called, &buffer](SerialiseTarget field_target) {
                 func_called = true;
                 SerialiseTarget const expected_field_target{buffer, 60, 20, 4, 80};
@@ -89,7 +89,7 @@ namespace serialpp::test {
         SerialiseTarget const target{buffer, 30, 7, 13, 40};
 
         bool func_called = false;
-        auto const new_target = target.push_variable_field<DummySerialisable<8>>(
+        auto const new_target = target.push_variable_field<MockSerialisable<8>>(
             [&func_called, &buffer](SerialiseTarget field_target) {
                 func_called = true;
                 SerialiseTarget const expected_field_target{buffer, 30, 40, 8, 48};
@@ -110,21 +110,21 @@ namespace serialpp::test {
         SerialiseTarget const target{buffer, 50, 10, 50, 50};
 
         bool func1_called = false;
-        auto const new_target = target.push_fixed_field<DummySerialisable<8>>(
+        auto const new_target = target.push_fixed_field<MockSerialisable<8>>(
             [&func1_called, &buffer](SerialiseTarget field_target) {
                 func1_called = true;
                 SerialiseTarget const expected_field_target{buffer, 50, 10, 8, 50};
                 test_assert(field_target == expected_field_target);
 
                 bool func2_called = false;
-                auto const new_target = field_target.push_variable_field<DummySerialisable<4>>(
+                auto const new_target = field_target.push_variable_field<MockSerialisable<4>>(
                     [&func2_called, &buffer](SerialiseTarget field_target) {
                         func2_called = true;
                         SerialiseTarget const expected_field_target{buffer, 50, 50, 4, 54};
                         test_assert(field_target == expected_field_target);
 
                         bool func3_called = false;
-                        auto const new_target = field_target.push_fixed_field<DummySerialisable<2>>(
+                        auto const new_target = field_target.push_fixed_field<MockSerialisable<2>>(
                             [&func3_called, &buffer](SerialiseTarget field_target) {
                                 func3_called = true;
                                 SerialiseTarget const expected_field_target{buffer, 50, 50, 2, 54};
@@ -150,6 +150,29 @@ namespace serialpp::test {
 
         SerialiseTarget const expected_new_target{buffer, 50, 18, 42, 54};
         test_assert(new_target == expected_new_target);
+    }
+
+
+    STEST_CASE(Serialise) {
+        SerialiseBuffer buffer;
+        SerialiseSource<MockSerialisable<5>> const source{67543};
+        serialise(source, buffer);
+
+        auto const serialised_source = Serialiser<MockSerialisable<5>>::source;
+        test_assert(serialised_source == source);
+        auto const target = Serialiser<MockSerialisable<5>>::target;
+        SerialiseTarget const expected_target{buffer, 5, 0, 5, 5};
+        test_assert(target == expected_target);
+    }
+
+
+    STEST_CASE(Deserialise) {
+        std::array<std::byte, 10> const buffer{};
+        auto const deserialiser = deserialise<MockSerialisable<7>>(buffer);
+        ConstBytesView expected_fixed_data{buffer.data(), buffer.data() + 7};
+        test_assert(bytes_view_same(deserialiser.fixed_data, expected_fixed_data));
+        ConstBytesView expected_variable_data{buffer.data() + 7, buffer.data() + 10};
+        test_assert(bytes_view_same(deserialiser.variable_data, expected_variable_data));
     }
 
 }
