@@ -56,6 +56,7 @@ namespace serialpp {
     struct Deserialiser<std::byte> : DeserialiserBase {
         using DeserialiserBase::DeserialiserBase;
 
+        // Deserialises the value.
         std::byte value() const {
             assert(fixed_data.size() >= 1);
             return fixed_data[0];
@@ -93,8 +94,10 @@ namespace serialpp {
         // Deserialises the value.
         U value() const {
             assert(fixed_data.size() >= sizeof(U));
-            U value;
-            std::memcpy(&value, fixed_data.data(), sizeof(U));
+            U value = 0;
+            for (std::size_t i = 0; i < sizeof(U); ++i) {
+                value |= std::to_integer<U>(fixed_data[i]) << (i * 8);
+            }
             return value;
         }
     };
@@ -140,6 +143,7 @@ namespace serialpp {
     struct Deserialiser<bool> : Deserialiser<std::uint8_t> {
         using Deserialiser<std::uint8_t>::Deserialiser;
 
+        // Deserialises the value.
         bool value() const {
             return static_cast<bool>(Deserialiser<std::uint8_t>::value());
         }

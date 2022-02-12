@@ -10,7 +10,7 @@
 namespace serialpp::test {
 
     STEST_CASE(ToDataOffset_Valid) {
-        test_assert(to_data_offset(102) == static_cast<std::size_t>(102));
+        test_assert(to_data_offset(102) == std::size_t{102});
     }
 
 
@@ -38,13 +38,13 @@ namespace serialpp::test {
         auto span = buffer.span();
         test_assert(span.size() == 100);
 
-        span[0] = static_cast<std::byte>(10);
-        span[99] = static_cast<std::byte>(42);
+        span[0] = std::byte{10};
+        span[99] = std::byte{42};
         buffer.extend(100);
         span = buffer.span();
         test_assert(span.size() == 200);
-        test_assert(span[0] == static_cast<std::byte>(10));
-        test_assert(span[99] == static_cast<std::byte>(42));
+        test_assert(span[0] == std::byte{10});
+        test_assert(span[99] == std::byte{42});
     }
 
 
