@@ -53,7 +53,16 @@ namespace serialpp::test {
     static_assert(FIXED_DATA_SIZE<std::uint32_t> == 4);
 
     STEST_CASE(Serialiser_UInt) {
-        // TODO
+        SerialiseBuffer buffer;
+        auto target = buffer.initialise_for<std::uint32_t>();
+        SerialiseSource<std::uint32_t> const source{43'834'534u};
+        Serialiser<std::uint32_t> const serialiser;
+        target = serialiser(source, target);
+
+        std::array<unsigned char, 4> const expected_buffer{0xA6, 0xDC, 0x9C, 0x02};
+        test_assert(buffer_equal(buffer, expected_buffer));
+        SerialiseTarget const expected_target{buffer, 4, 0, 4, 4};
+        test_assert(target == expected_target);
     }
 
     STEST_CASE(Deserialiser_UInt) {
@@ -64,7 +73,27 @@ namespace serialpp::test {
     }
 
 
-    // TODO: signed integer
+    static_assert(FIXED_DATA_SIZE<std::int64_t> == 8);
+
+    STEST_CASE(Serialise_Int) {
+        SerialiseBuffer buffer;
+        auto target = buffer.initialise_for<std::int64_t>();
+        SerialiseSource<std::int64_t> const source{-567'865'433'565'765ll};
+        Serialiser<std::int64_t> const serialiser;
+        target = serialiser(source, target);
+
+        std::array<unsigned char, 8> const expected_buffer{0xBB, 0x55, 0x8D, 0x86, 0x87, 0xFB, 0xFD, 0xFF};
+        test_assert(buffer_equal(buffer, expected_buffer));
+        SerialiseTarget const expected_target{buffer, 8, 0, 8, 8};
+        test_assert(target == expected_target);
+    }
+
+    STEST_CASE(Deserialiser_Int) {
+        std::array<unsigned char, 8> const buffer{0x01, 0xC2, 0x31, 0xB3, 0xFB, 0xFF, 0xFF, 0xFF};
+        auto const deserialiser = deserialise<std::int64_t>(std::as_bytes(std::span{buffer}));
+        auto const value = deserialiser.value();
+        test_assert(value == -18'468'453'887ll);
+    }
 
 
     static_assert(FIXED_DATA_SIZE<bool> == 1);
