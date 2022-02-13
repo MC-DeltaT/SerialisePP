@@ -82,7 +82,7 @@ namespace serialpp {
         // 0 indicates no contained value, i.e. empty optional.
         [[nodiscard]]
         DataOffset _value_offset() const {
-            return Deserialiser<DataOffset>{fixed_data}.value();
+            return Deserialiser<DataOffset>{fixed_data, variable_data}.value();
         }
     };
 

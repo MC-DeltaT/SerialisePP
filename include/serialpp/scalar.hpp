@@ -36,6 +36,9 @@ namespace serialpp {
     };
 
 
+    // TODO: is it an issue that nonscalar serialisers adjust the fixed data offset, but scalar serialisers do not?
+
+
     /*
         Byte:
             Represented as-is, as 8 bits.

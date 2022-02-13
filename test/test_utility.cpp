@@ -32,7 +32,7 @@ namespace serialpp::test {
     }
 
 
-    STEST_CASE(NamedTuple_GetConst) {
+    STEST_CASE(NamedTuple_Get_Const) {
         NamedTuple<
                 NamedTupleElement<"foo", int>,
                 NamedTupleElement<"bar", char>,
@@ -46,7 +46,7 @@ namespace serialpp::test {
         test_assert(tuple.get<"my_str">() == std::string{"foo bar"});
     }
 
-    STEST_CASE(NamedTuple_GetNonconst) {
+    STEST_CASE(NamedTuple_Get_Nonconst) {
         NamedTuple<
                 NamedTupleElement<"foo", int>,
                 NamedTupleElement<"bar", char>,
@@ -63,7 +63,7 @@ namespace serialpp::test {
         test_assert(tuple.get<"my_str">() == std::string{"bar qux"});
     }
 
-    STEST_CASE(NamedTuple_GetNonexistent) {
+    STEST_CASE(NamedTuple_Get_Nonexistent) {
         using Tuple = NamedTuple<
             NamedTupleElement<"foo", int>,
             NamedTupleElement<"bar", char>,

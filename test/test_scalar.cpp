@@ -98,7 +98,7 @@ namespace serialpp::test {
 
     static_assert(FIXED_DATA_SIZE<bool> == 1);
 
-    STEST_CASE(Serialiser_BoolFalse) {
+    STEST_CASE(Serialiser_Bool_False) {
         SerialiseBuffer buffer;
         auto target = buffer.initialise_for<bool>();
         SerialiseSource<bool> const source{false};
@@ -111,7 +111,7 @@ namespace serialpp::test {
         test_assert(target == expected_target);
     }
 
-    STEST_CASE(Serialiser_BoolTrue) {
+    STEST_CASE(Serialiser_Bool_True) {
         SerialiseBuffer buffer;
         auto target = buffer.initialise_for<bool>();
         SerialiseSource<bool> const source{true};
@@ -124,13 +124,13 @@ namespace serialpp::test {
         test_assert(target == expected_target);
     }
 
-    STEST_CASE(Deserialiser_BoolFalse) {
+    STEST_CASE(Deserialiser_Bool_False) {
         std::array<unsigned char, 1> const buffer{0x00};
         auto const deserialiser = deserialise<bool>(std::as_bytes(std::span{buffer}));
         test_assert(!deserialiser.value());
     }
 
-    STEST_CASE(Deserialiser_BoolTrue) {
+    STEST_CASE(Deserialiser_Bool_True) {
         std::array<unsigned char, 1> const buffer{0x01};
         auto const deserialiser = deserialise<bool>(std::as_bytes(std::span{buffer}));
         test_assert(deserialiser.value());
