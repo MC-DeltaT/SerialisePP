@@ -17,12 +17,14 @@ namespace serialpp::test {
 
 
     template<std::size_t N>
+    [[nodiscard]]
     bool buffer_equal(SerialiseBuffer const& buffer, std::array<unsigned char, N> const& expected) {
         return std::ranges::equal(buffer.span(), std::as_bytes(std::span{expected}));
     }
 
 
     // Checks if two ConstBytesView view the same location and size.
+    [[nodiscard]]
     inline bool bytes_view_same(ConstBytesView v1, ConstBytesView v2) {
         return v1.data() == v2.data() && v1.size() == v2.size();
     }
@@ -38,7 +40,8 @@ namespace serialpp {
     struct SerialiseSource<test::MockSerialisable<FixedSize>> {
         int tag = 0;
 
-        constexpr friend auto operator<=>(SerialiseSource const&, SerialiseSource const&) = default;
+        [[nodiscard]]
+        friend constexpr auto operator<=>(SerialiseSource const&, SerialiseSource const&) = default;
     };
 
     template<std::size_t FixedSize>
@@ -60,6 +63,7 @@ namespace serialpp {
     };
 
     template<std::size_t FixedSize>
+    [[nodiscard]]
     constexpr bool operator==(Deserialiser<test::MockSerialisable<FixedSize>> const& lhs,
             Deserialiser<test::MockSerialisable<FixedSize>> const& rhs) {
         return test::bytes_view_same(lhs.fixed_data, rhs.fixed_data)

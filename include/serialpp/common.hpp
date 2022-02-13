@@ -27,6 +27,7 @@ namespace serialpp {
 
 
     // Safely casts to DataOffset.
+    [[nodiscard]]
     inline DataOffset to_data_offset(std::size_t offset) {
         assert(std::cmp_less_equal(offset, std::numeric_limits<DataOffset>::max()));
         return static_cast<DataOffset>(offset);
@@ -103,10 +104,12 @@ namespace serialpp {
             _data.resize(_data.size() + count);
         }
 
+        [[nodiscard]]
         MutableBytesView span() {
             return {_data};
         }
 
+        [[nodiscard]]
         ConstBytesView span() const {
             return {_data};
         }
@@ -133,12 +136,14 @@ namespace serialpp {
         }
 
         // Gets the buffer for the current field's fixed data.
+        [[nodiscard]]
         MutableBytesView field_fixed_data() const {
             assert(_field_fixed_offset + _field_fixed_size <= _buffer->span().size());
             return _buffer->span().subspan(_field_fixed_offset).first(_field_fixed_size);
         }
 
         // Gets the offset of the current field's variable data relative to the end of the fixed data.
+        [[nodiscard]]
         std::size_t relative_field_variable_offset() const {
             assert(_field_variable_offset >= _fixed_size);
             return _field_variable_offset - _fixed_size;
@@ -185,6 +190,7 @@ namespace serialpp {
             return result;
         }
 
+        [[nodiscard]]
         friend auto operator<=>(SerialiseTarget const& lhs, SerialiseTarget const& rhs) = default;
     
     private:
@@ -208,6 +214,7 @@ namespace serialpp {
     // buffer should contain exactly an instance of T (i.e. you can only use this function to deserialise the result of
     // serialising an entire object with serialise()).
     template<Serialisable T>
+    [[nodiscard]]
     Deserialiser<T> deserialise(ConstBytesView buffer) {
         constexpr auto fixed_size = FIXED_DATA_SIZE<T>;
         assert(buffer.size() >= fixed_size);

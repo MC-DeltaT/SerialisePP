@@ -40,6 +40,7 @@ namespace serialpp {
             std::copy_n(str, N, data);
         }
         
+        [[nodiscard]]
         constexpr std::string_view string_view() const {
             return {data, N};
         }
@@ -51,6 +52,7 @@ namespace serialpp {
 
 
     template<std::size_t N1, std::size_t N2>
+    [[nodiscard]]
     constexpr bool operator==(ConstantString<N1> const& lhs, ConstantString<N2> const& rhs) {
         return lhs.string_view() == rhs.string_view();
     }
@@ -76,11 +78,13 @@ namespace serialpp {
     namespace impl {
 
         template<ConstantString Name, typename T>
+        [[nodiscard]]
         constexpr auto&& named_tuple_get(NamedTupleElement<Name, T>& tuple) noexcept {
             return tuple.value;
         }
 
         template<ConstantString Name, typename T>
+        [[nodiscard]]
         constexpr auto&& named_tuple_get(NamedTupleElement<Name, T> const& tuple) noexcept {
             return tuple.value;
         }
@@ -120,12 +124,14 @@ namespace serialpp {
 
         // Gets an element by name.
         template<ConstantString Name>
+        [[nodiscard]]
         constexpr auto&& get() noexcept requires NamedTupleHasElement<NamedTuple, Name>::value {
             return impl::named_tuple_get<Name>(*this);
         }
 
         // Gets an element by name.
         template<ConstantString Name>
+        [[nodiscard]]
         constexpr auto&& get() const noexcept requires NamedTupleHasElement<NamedTuple, Name>::value {
             return impl::named_tuple_get<Name>(*this);
         }

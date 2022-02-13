@@ -76,6 +76,7 @@ namespace serialpp {
 
 
     template<class Fields, ConstantString N> requires IsFieldsList<Fields>::value
+    [[nodiscard]]
     consteval std::size_t field_offset() noexcept {
         static_assert(!std::same_as<Fields, TypeList<>>, "No field with the specified name");
         if constexpr (Fields::Head::NAME == N) {
@@ -141,6 +142,7 @@ namespace serialpp {
 
         // Gets a field by name.
         template<ConstantString Name>
+        [[nodiscard]]
         auto get() const {
             constexpr auto offset = FIELD_OFFSET<S, Name>;
             assert(offset <= fixed_data.size());

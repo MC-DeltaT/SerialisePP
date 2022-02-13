@@ -57,11 +57,13 @@ namespace serialpp {
         using DeserialiserBase::DeserialiserBase;
 
         // Checks if the Optional contains a value.
+        [[nodiscard]]
         bool has_value() const {
             return _value_offset() > 0;
         }
 
         // Gets the contained value. has_value() must be true.
+        [[nodiscard]]
         auto value() const {
             auto offset = _value_offset();
             assert(offset > 0);
@@ -78,6 +80,7 @@ namespace serialpp {
     private:
         // Offset from start of variable data section to contained value, plus 1.
         // 0 indicates no contained value, i.e. empty optional.
+        [[nodiscard]]
         DataOffset _value_offset() const {
             return Deserialiser<DataOffset>{fixed_data}.value();
         }

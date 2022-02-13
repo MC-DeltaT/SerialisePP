@@ -28,6 +28,7 @@ namespace serialpp {
 
 
     // Safely casts to ListSizeType.
+    [[nodiscard]]
     inline ListSizeType to_list_size(std::size_t offset) {
         assert(std::cmp_less_equal(offset, std::numeric_limits<ListSizeType>::max()));
         return static_cast<ListSizeType>(offset);
@@ -119,11 +120,13 @@ namespace serialpp {
         using DeserialiserBase::DeserialiserBase;
 
         // Gets the number of elements in the List.
+        [[nodiscard]]
         std::size_t size() const {
             return Deserialiser<ListSizeType>{fixed_data, variable_data}.value();
         }
 
         // Deserialises the element at the index. index must be < size().
+        [[nodiscard]]
         auto operator[](std::size_t index) const {
             assert(index < size());
             auto const offset = _offset();
@@ -137,6 +140,7 @@ namespace serialpp {
         // TODO: iterators
 
     private:
+        [[nodiscard]]
         DataOffset _offset() const {
             return Deserialiser<DataOffset>{
                 fixed_data.subspan(FIXED_DATA_SIZE<ListSizeType>),

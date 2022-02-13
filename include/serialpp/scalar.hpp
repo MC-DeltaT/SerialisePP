@@ -24,10 +24,12 @@ namespace serialpp {
             value{value}
         {}
 
+        [[nodiscard]]
         constexpr operator S&() noexcept {
             return value;
         }
 
+        [[nodiscard]]
         constexpr operator S const&() const noexcept {
             return value;
         }
@@ -57,6 +59,7 @@ namespace serialpp {
         using DeserialiserBase::DeserialiserBase;
 
         // Deserialises the value.
+        [[nodiscard]]
         std::byte value() const {
             assert(fixed_data.size() >= 1);
             return fixed_data[0];
@@ -92,6 +95,7 @@ namespace serialpp {
         using DeserialiserBase::DeserialiserBase;
 
         // Deserialises the value.
+        [[nodiscard]]
         U value() const {
             assert(fixed_data.size() >= sizeof(U));
             U value = 0;
@@ -118,6 +122,7 @@ namespace serialpp {
         using Deserialiser<std::make_unsigned_t<S>>::Deserialiser;
 
         // Deserialises the value.
+        [[nodiscard]]
         S value() const {
             return static_cast<S>(Deserialiser<std::make_unsigned_t<S>>::value());
         }
@@ -144,6 +149,7 @@ namespace serialpp {
         using Deserialiser<std::uint8_t>::Deserialiser;
 
         // Deserialises the value.
+        [[nodiscard]]
         bool value() const {
             return static_cast<bool>(Deserialiser<std::uint8_t>::value());
         }
@@ -152,6 +158,7 @@ namespace serialpp {
 
     // If deserialiser is for a scalar, then returns the deserialised value, otherwise returns deserialiser unchanged.
     template<Serialisable T>
+    [[nodiscard]]
     auto auto_deserialise_scalar(Deserialiser<T> const& deserialiser) {
         if constexpr (Scalar<T>) {
             return deserialiser.value();
