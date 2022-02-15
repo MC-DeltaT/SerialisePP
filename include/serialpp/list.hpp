@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <limits>
 #include <memory>
+#include <ranges>
 #include <type_traits>
 #include <utility>
 
@@ -17,7 +18,7 @@ namespace serialpp {
 
     /*
         List:
-            Fixed data is a element count (ListSizeType) and an offset (DataOffset).
+            Fixed data is an element count (ListSizeType) and an offset (DataOffset).
             If the element count is > 0, then that many elements are contained starting at the offset in the variable
             data section.
             If the element count is 0, then the offset is unused and no variable data is present.
@@ -137,7 +138,14 @@ namespace serialpp {
             return auto_deserialise_scalar(deserialiser);
         }
 
-        // TODO: iterators
+        // Gets a view of the elements.
+        [[nodiscard]]
+        auto elements() const {
+            return std::ranges::views::iota(std::size_t{0}, size())
+                | std::ranges::views::transform([this](std::size_t index) {
+                    return (*this)[index];
+                });
+        }
 
     private:
         [[nodiscard]]

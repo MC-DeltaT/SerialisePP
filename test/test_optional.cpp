@@ -44,7 +44,7 @@ namespace serialpp::test {
         test_assert(new_target == expected_target);
         std::array<unsigned char, 16> const expected_buffer{
             0x0B, 0x00,     // Optional value offset
-            0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A,     // Unused padding
+            0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A,     // Dummy padding
             0x6E, 0x86, 0x31, 0x00      // Optional value
         };
         test_assert(buffer_equal(buffer, expected_buffer));
@@ -59,7 +59,7 @@ namespace serialpp::test {
     STEST_CASE(Deserialiser_Optional_Nonempty) {
         std::array<unsigned char, 8> const buffer{
             0x05, 0x00,     // Optional value offset
-            0x11, 0x22, 0x33, 0x44,     // Unused padding
+            0x11, 0x22, 0x33, 0x44,     // Dummy padding
             0xFE, 0xDC      // Optional value
         };
         auto const deserialiser = deserialise<Optional<std::int16_t>>(std::as_bytes(std::span{buffer}));
