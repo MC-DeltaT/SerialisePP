@@ -10,7 +10,7 @@
 namespace serialpp::test {
 
     STEST_CASE(ToDataOffset_Valid) {
-        test_assert(to_data_offset(102) == std::size_t{102});
+        test_assert(to_data_offset(102) == 102u);
     }
 
 
@@ -22,7 +22,7 @@ namespace serialpp::test {
 
     STEST_CASE(SerialiseBuffer_InitialiseFor) {
         SerialiseBuffer buffer;
-        auto const target = buffer.initialise_for<MockSerialisable<8>>();
+        auto const target = buffer.initialise<MockSerialisable<8>>();
 
         SerialiseTarget const expected_target{buffer, 8, 0, 8, 8};
         test_assert(target == expected_target);

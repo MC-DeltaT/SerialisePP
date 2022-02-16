@@ -79,34 +79,22 @@ namespace serialpp {
 
         template<ConstantString Name, typename T>
         [[nodiscard]]
-        constexpr auto&& named_tuple_get(NamedTupleElement<Name, T>& tuple) noexcept {
+        constexpr T& get(NamedTupleElement<Name, T>& tuple) noexcept {
             return tuple.value;
         }
 
         template<ConstantString Name, typename T>
         [[nodiscard]]
-        constexpr auto&& named_tuple_get(NamedTupleElement<Name, T> const& tuple) noexcept {
+        constexpr T const& get(NamedTupleElement<Name, T> const& tuple) noexcept {
             return tuple.value;
         }
-
-
-        template<ConstantString Name, typename T>
-        T named_tuple_element_type(NamedTupleElement<Name, T> const& tuple);
 
     }
 
 
     // Checks if a NamedTuple has an element with a specified name.
     template<class Tuple, ConstantString Name>
-    struct NamedTupleHasElement : std::bool_constant<requires {
-        impl::named_tuple_element_type<Name>(std::declval<Tuple>());
-    }> {};
-
-
-    // Gets the type of the NamedTuple element with the specified name.
-    // If there is no element with that name, a compile error occurs.
-    template<class Tuple, ConstantString Name> requires NamedTupleHasElement<Tuple, Name>::value
-    using NamedTupleElementType = decltype(impl::named_tuple_element_type<Name>(std::declval<Tuple>()));
+    struct HasElement : std::bool_constant<requires { impl::get<Name>(std::declval<Tuple>()); }> {};
 
 
     // A tuple where each element is associated with a name given by a ConstantString.
@@ -125,15 +113,15 @@ namespace serialpp {
         // Gets an element by name.
         template<ConstantString Name>
         [[nodiscard]]
-        constexpr auto&& get() noexcept requires NamedTupleHasElement<NamedTuple, Name>::value {
-            return impl::named_tuple_get<Name>(*this);
+        constexpr auto&& get() noexcept requires HasElement<NamedTuple, Name>::value {
+            return impl::get<Name>(*this);
         }
 
         // Gets an element by name.
         template<ConstantString Name>
         [[nodiscard]]
-        constexpr auto&& get() const noexcept requires NamedTupleHasElement<NamedTuple, Name>::value {
-            return impl::named_tuple_get<Name>(*this);
+        constexpr auto&& get() const noexcept requires HasElement<NamedTuple, Name>::value {
+            return impl::get<Name>(*this);
         }
     };
 

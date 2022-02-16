@@ -32,7 +32,7 @@ namespace serialpp::test {
 
     STEST_CASE(Serialiser_Byte) {
         SerialiseBuffer buffer;
-        auto target = buffer.initialise_for<std::byte>();
+        auto target = buffer.initialise<std::byte>();
         SerialiseSource<std::byte> const source{std::byte{0x12}};
         Serialiser<std::byte> const serialiser;
         target = serialiser(source, target);
@@ -54,7 +54,7 @@ namespace serialpp::test {
 
     STEST_CASE(Serialiser_UInt) {
         SerialiseBuffer buffer;
-        auto target = buffer.initialise_for<std::uint32_t>();
+        auto target = buffer.initialise<std::uint32_t>();
         SerialiseSource<std::uint32_t> const source{43'834'534u};
         Serialiser<std::uint32_t> const serialiser;
         target = serialiser(source, target);
@@ -75,9 +75,9 @@ namespace serialpp::test {
 
     static_assert(FIXED_DATA_SIZE<std::int64_t> == 8);
 
-    STEST_CASE(Serialise_Int) {
+    STEST_CASE(Serialiser_Int) {
         SerialiseBuffer buffer;
-        auto target = buffer.initialise_for<std::int64_t>();
+        auto target = buffer.initialise<std::int64_t>();
         SerialiseSource<std::int64_t> const source{-567'865'433'565'765ll};
         Serialiser<std::int64_t> const serialiser;
         target = serialiser(source, target);
@@ -100,7 +100,7 @@ namespace serialpp::test {
 
     STEST_CASE(Serialiser_Bool_False) {
         SerialiseBuffer buffer;
-        auto target = buffer.initialise_for<bool>();
+        auto target = buffer.initialise<bool>();
         SerialiseSource<bool> const source{false};
         Serialiser<bool> const serialiser;
         target = serialiser(source, target);
@@ -113,7 +113,7 @@ namespace serialpp::test {
 
     STEST_CASE(Serialiser_Bool_True) {
         SerialiseBuffer buffer;
-        auto target = buffer.initialise_for<bool>();
+        auto target = buffer.initialise<bool>();
         SerialiseSource<bool> const source{true};
         Serialiser<bool> const serialiser;
         target = serialiser(source, target);

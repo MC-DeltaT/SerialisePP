@@ -6,6 +6,7 @@
 
 #include <serialpp/common.hpp>
 #include <serialpp/list.hpp>
+#include <serialpp/scalar.hpp>
 
 #include "helpers/common.hpp"
 #include "helpers/test.hpp"
@@ -18,7 +19,7 @@ namespace serialpp::test {
 
     STEST_CASE(Serialiser_List_Empty) {
         SerialiseBuffer buffer;
-        auto const target = buffer.initialise_for<List<std::uint64_t>>();
+        auto const target = buffer.initialise<List<std::uint64_t>>();
         SerialiseSource<List<std::uint64_t>> const source{std::ranges::views::empty<std::uint64_t>};
         Serialiser<List<std::uint64_t>> const serialiser;
         auto const new_target = serialiser(source, target);

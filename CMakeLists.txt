@@ -12,6 +12,7 @@ add_executable(SerialisePPTest
     test/test_list.cpp
     test/test_optional.cpp
     test/test_scalar.cpp
+    test/test_struct.cpp
     test/test_utility.cpp
 )
 target_include_directories(SerialisePPTest PRIVATE test/)

@@ -3,6 +3,7 @@
 #include <cassert>
 #include <concepts>
 #include <cstddef>
+#include <utility>
 #include <type_traits>
 
 #include "common.hpp"
@@ -18,12 +19,18 @@ namespace serialpp {
 
 
     // Specified a field of a serialisable struct.
-    template<ConstantString Name, Serialisable Type>
-    using Field = NamedTupleElement<Name, Type>;
+    template<ConstantString Name, Serialisable T>
+    struct Field {
+        using Type = T;
+
+        static inline constexpr auto NAME = Name;
+    };
 
 
     template<typename T>
-    using IsField = IsNamedTupleElement<T>;
+    struct IsField : std::bool_constant<
+        requires { requires std::derived_from<T, Field<T::NAME, typename T::Type>>; }
+    > {};
 
 
     // Base for compound structures that can contain arbitrary serialisable fields.
@@ -34,8 +41,8 @@ namespace serialpp {
     //     Field<"qux", List<std::int8_t>>
     //  > {};
     template<class... Fs> requires (IsField<Fs>::value && ...)
-    struct SerialisableStruct : NamedTuple<Fs...> {
-        using Fields = NamedTuple<Fs...>::Elements;
+    struct SerialisableStruct : Fs... {
+        using Fields = TypeList<Fs...>;
     };
 
 
@@ -61,6 +68,25 @@ namespace serialpp {
     template<class T>
     concept Struct =
         IsFieldsList<typename T::Fields>::value && impl::IsDerivedFromSerialisableStruct<T, typename T::Fields>::value;
+
+
+    namespace impl {
+
+        template<ConstantString Name, typename T>
+        consteval T field_type(Field<Name, T> const&);
+
+    }
+
+
+    // Checks if a SerialisableStruct has a field with a specified name.
+    template<Struct S, ConstantString Name>
+    struct HasField : std::bool_constant<requires { impl::field_type<Name>(std::declval<S>()); }> {};
+
+
+    // Gets the type of the SerialisableStruct field with the specified name.
+    // If there is no such field, a compile error occurs.
+    template<Struct S, ConstantString Name>
+    using FieldType = decltype(impl::field_type<Name>(std::declval<S>()));
 
 
     template<class Fields> requires IsFieldsList<Fields>::value
@@ -89,7 +115,7 @@ namespace serialpp {
 
     // Gets the offset of a field from the beginning of the fixed data section.
     // If there is no field with the specified name, a compile error occurs.
-    template<Struct S, ConstantString N> requires NamedTupleHasElement<S, N>::value
+    template<Struct S, ConstantString N> requires HasField<S, N>::value
     static inline constexpr auto FIELD_OFFSET = field_offset<typename S::Fields, N>();
 
 
@@ -146,8 +172,7 @@ namespace serialpp {
         auto get() const {
             constexpr auto offset = FIELD_OFFSET<S, Name>;
             assert(offset <= fixed_data.size());
-            using FieldType = NamedTupleElementType<S, Name>;
-            auto deserialiser = Deserialiser<FieldType>{
+            auto deserialiser = Deserialiser<FieldType<S, Name>>{
                 fixed_data.subspan(offset),
                 variable_data
             };

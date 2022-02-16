@@ -5,6 +5,7 @@
 
 #include <serialpp/common.hpp>
 #include <serialpp/optional.hpp>
+#include <serialpp/scalar.hpp>
 
 #include "helpers/common.hpp"
 #include "helpers/test.hpp"
@@ -19,7 +20,7 @@ namespace serialpp::test {
     STEST_CASE(Serialiser_Optional_Empty) {
         SerialiseBuffer buffer;
         SerialiseSource<Optional<std::int32_t>> const source{};
-        auto const target = buffer.initialise_for<Optional<std::int32_t>>();
+        auto const target = buffer.initialise<Optional<std::int32_t>>();
         Serialiser<Optional<std::int32_t>> const serialiser;
         auto const new_target = serialiser(source, target);
 

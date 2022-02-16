@@ -92,7 +92,7 @@ namespace serialpp {
         // Initialises the buffer for a type T to be serialised into.
         // The returned SerialiseTarget is set up ready for Serialiser<T>.
         template<Serialisable T>
-        SerialiseTarget initialise_for() {
+        SerialiseTarget initialise() {
             constexpr auto fixed_size = FIXED_DATA_SIZE<T>;
             _data.resize(fixed_size);
             return {*this, fixed_size, 0, fixed_size, fixed_size};
@@ -205,7 +205,7 @@ namespace serialpp {
     // Serialises an entire object.
     template<Serialisable T>
     void serialise(SerialiseSource<T> const& source, SerialiseBuffer& buffer) {
-        auto const target = buffer.initialise_for<T>();
+        auto const target = buffer.initialise<T>();
         Serialiser<T>{}(source, target);
     }
 

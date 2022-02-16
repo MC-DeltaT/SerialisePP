@@ -20,6 +20,10 @@ namespace serialpp {
     struct SerialiseSource<S> {
         S value;
 
+        constexpr SerialiseSource() noexcept :
+            value{}
+        {}
+
         constexpr SerialiseSource(S value) noexcept :
             value{value}
         {}

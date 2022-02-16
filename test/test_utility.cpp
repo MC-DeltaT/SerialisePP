@@ -32,6 +32,20 @@ namespace serialpp::test {
     }
 
 
+    STEST_CASE(NamedTuple_DefaultConstruct) {
+        NamedTuple<
+                NamedTupleElement<"foo", int>,
+                NamedTupleElement<"bar", char>,
+                NamedTupleElement<"qux", int>,
+                NamedTupleElement<"my_str", std::string>>
+            tuple{};
+        
+        test_assert(tuple.get<"foo">() == 0);
+        test_assert(tuple.get<"bar">() == 0);
+        test_assert(tuple.get<"qux">() == 0);
+        test_assert(tuple.get<"my_str">() == std::string{});
+    }
+
     STEST_CASE(NamedTuple_Get_Const) {
         NamedTuple<
                 NamedTupleElement<"foo", int>,
