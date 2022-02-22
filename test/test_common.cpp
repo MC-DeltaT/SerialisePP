@@ -89,18 +89,18 @@ namespace serialpp::test {
         SerialiseTarget const target{buffer, 30, 7, 13, 40};
 
         bool func_called = false;
-        auto const new_target = target.push_variable_field<MockSerialisable<8>>(
+        auto const new_target = target.push_variable_fields<MockSerialisable<8>>(6,
             [&func_called, &buffer](SerialiseTarget field_target) {
                 func_called = true;
-                SerialiseTarget const expected_field_target{buffer, 30, 40, 8, 48};
+                SerialiseTarget const expected_field_target{buffer, 30, 40, 48, 88};
                 test_assert(field_target == expected_field_target);
                 return field_target;
             });
         test_assert(func_called);
 
-        test_assert(buffer.span().size() == 48);
+        test_assert(buffer.span().size() == 88);
 
-        SerialiseTarget const expected_new_target{buffer, 30, 7, 13, 48};
+        SerialiseTarget const expected_new_target{buffer, 30, 7, 13, 88};
         test_assert(new_target == expected_new_target);
     }
 
@@ -117,38 +117,38 @@ namespace serialpp::test {
                 test_assert(field_target == expected_field_target);
 
                 bool func2_called = false;
-                auto const new_target = field_target.push_variable_field<MockSerialisable<4>>(
+                auto const new_target = field_target.push_variable_fields<MockSerialisable<4>>(2,
                     [&func2_called, &buffer](SerialiseTarget field_target) {
                         func2_called = true;
-                        SerialiseTarget const expected_field_target{buffer, 50, 50, 4, 54};
+                        SerialiseTarget const expected_field_target{buffer, 50, 50, 8, 58};
                         test_assert(field_target == expected_field_target);
 
                         bool func3_called = false;
                         auto const new_target = field_target.push_fixed_field<MockSerialisable<2>>(
                             [&func3_called, &buffer](SerialiseTarget field_target) {
                                 func3_called = true;
-                                SerialiseTarget const expected_field_target{buffer, 50, 50, 2, 54};
+                                SerialiseTarget const expected_field_target{buffer, 50, 50, 2, 58};
                                 test_assert(field_target == expected_field_target);
 
                                 return field_target;
                             });
                         test_assert(func3_called);
 
-                        SerialiseTarget const expected_new_target{buffer, 50, 52, 2, 54};
+                        SerialiseTarget const expected_new_target{buffer, 50, 52, 6, 58};
                         test_assert(new_target == expected_new_target);
 
                         return new_target;
                     });
                 test_assert(func2_called);
 
-                SerialiseTarget const expected_new_target{buffer, 50, 10, 8, 54};
+                SerialiseTarget const expected_new_target{buffer, 50, 10, 8, 58};
                 test_assert(new_target == expected_new_target);
 
                 return new_target;
             });
         test_assert(func1_called);
 
-        SerialiseTarget const expected_new_target{buffer, 50, 18, 42, 54};
+        SerialiseTarget const expected_new_target{buffer, 50, 18, 42, 58};
         test_assert(new_target == expected_new_target);
     }
 

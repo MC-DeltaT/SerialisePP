@@ -61,7 +61,7 @@ namespace serialpp {
         template<typename T, class... Fields> requires (IsField<Fields>::value && ...)
         struct IsDerivedFromSerialisableStruct<T, TypeList<Fields...>>
             : std::is_base_of<SerialisableStruct<Fields...>, T> {};
-    
+
     }
 
 

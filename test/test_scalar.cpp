@@ -1,7 +1,6 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
-#include <span>
 #include <string>
 
 #include <serialpp/common.hpp>
@@ -45,11 +44,11 @@ namespace serialpp::test {
 
     STEST_CASE(Deserialiser_Byte) {
         std::array<unsigned char, 1> const buffer{0xF4};
-        auto const deserialiser = deserialise<std::byte>(std::as_bytes(std::span{buffer}));
+        auto const deserialiser = deserialise<std::byte>(as_const_bytes_view(buffer));
         test_assert(deserialiser.value() == std::byte{0xF4});
     }
 
-    
+
     static_assert(FIXED_DATA_SIZE<std::uint32_t> == 4);
 
     STEST_CASE(Serialiser_UInt) {
@@ -67,7 +66,7 @@ namespace serialpp::test {
 
     STEST_CASE(Deserialiser_UInt) {
         std::array<unsigned char, 4> const buffer{0x01, 0x23, 0x45, 0x67};
-        auto const deserialiser = deserialise<std::uint32_t>(std::as_bytes(std::span{buffer}));
+        auto const deserialiser = deserialise<std::uint32_t>(as_const_bytes_view(buffer));
         auto const value = deserialiser.value();
         test_assert(value == 1'732'584'193ull);
     }
@@ -90,7 +89,7 @@ namespace serialpp::test {
 
     STEST_CASE(Deserialiser_Int) {
         std::array<unsigned char, 8> const buffer{0x01, 0xC2, 0x31, 0xB3, 0xFB, 0xFF, 0xFF, 0xFF};
-        auto const deserialiser = deserialise<std::int64_t>(std::as_bytes(std::span{buffer}));
+        auto const deserialiser = deserialise<std::int64_t>(as_const_bytes_view(buffer));
         auto const value = deserialiser.value();
         test_assert(value == -18'468'453'887ll);
     }
@@ -126,20 +125,20 @@ namespace serialpp::test {
 
     STEST_CASE(Deserialiser_Bool_False) {
         std::array<unsigned char, 1> const buffer{0x00};
-        auto const deserialiser = deserialise<bool>(std::as_bytes(std::span{buffer}));
+        auto const deserialiser = deserialise<bool>(as_const_bytes_view(buffer));
         test_assert(!deserialiser.value());
     }
 
     STEST_CASE(Deserialiser_Bool_True) {
         std::array<unsigned char, 1> const buffer{0x01};
-        auto const deserialiser = deserialise<bool>(std::as_bytes(std::span{buffer}));
+        auto const deserialiser = deserialise<bool>(as_const_bytes_view(buffer));
         test_assert(deserialiser.value());
     }
 
 
     STEST_CASE(AutoDeserialiseScalar_Scalar) {
         std::array<unsigned char, 100> const buffer{0x01, 0x23, 0x45, 0x67, 0x11, 0x22, 0x33};
-        auto const deserialiser = deserialise<std::uint32_t>(std::as_bytes(std::span{buffer}));
+        auto const deserialiser = deserialise<std::uint32_t>(as_const_bytes_view(buffer));
         auto const value = auto_deserialise_scalar(deserialiser);
         test_assert(value == 1'732'584'193u);
     }

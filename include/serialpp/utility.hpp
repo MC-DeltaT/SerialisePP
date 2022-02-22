@@ -39,7 +39,7 @@ namespace serialpp {
         constexpr ConstantString(char const (&str)[N + 1]) {
             std::copy_n(str, N, data);
         }
-        
+
         [[nodiscard]]
         constexpr std::string_view string_view() const {
             return {data, N};

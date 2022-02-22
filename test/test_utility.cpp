@@ -39,7 +39,7 @@ namespace serialpp::test {
                 NamedTupleElement<"qux", int>,
                 NamedTupleElement<"my_str", std::string>>
             tuple{};
-        
+
         test_assert(tuple.get<"foo">() == 0);
         test_assert(tuple.get<"bar">() == 0);
         test_assert(tuple.get<"qux">() == 0);
@@ -53,7 +53,7 @@ namespace serialpp::test {
                 NamedTupleElement<"qux", int>,
                 NamedTupleElement<"my_str", std::string>>
             const tuple{42, 'c', 56, "foo bar"};
-        
+
         test_assert(tuple.get<"foo">() == 42);
         test_assert(tuple.get<"bar">() == 'c');
         test_assert(tuple.get<"qux">() == 56);
@@ -67,7 +67,7 @@ namespace serialpp::test {
                 NamedTupleElement<"qux", int>,
                 NamedTupleElement<"my_str", std::string>>
             tuple{42, 'c', 56, "foo bar"};
-        
+
         tuple.get<"bar">() = 'h';
         tuple.get<"my_str">() = "bar qux";
 

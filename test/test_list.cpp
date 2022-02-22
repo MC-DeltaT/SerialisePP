@@ -2,7 +2,6 @@
 #include <array>
 #include <cstdint>
 #include <ranges>
-#include <span>
 
 #include <serialpp/common.hpp>
 #include <serialpp/list.hpp>
@@ -14,8 +13,8 @@
 
 namespace serialpp::test {
 
-    static_assert(FIXED_DATA_SIZE<List<std::int8_t>> == 4);
-    static_assert(FIXED_DATA_SIZE<List<MockSerialisable<1000>>> == 4);
+    static_assert(FIXED_DATA_SIZE<List<std::int8_t>> == 2 + 2);
+    static_assert(FIXED_DATA_SIZE<List<MockSerialisable<1000>>> == 2 + 2);
 
     STEST_CASE(Serialiser_List_Empty) {
         SerialiseBuffer buffer;
@@ -40,7 +39,7 @@ namespace serialpp::test {
             buffer.span()[4 + i] = static_cast<std::byte>(i + 1);
         }
         SerialiseTarget const target{buffer, 4, 0, 4, 14};
-        SerialiseSource<List<std::uint32_t>> const source{std::array<std::uint32_t, 9>{
+        SerialiseSource<List<std::uint32_t>> const source{{
             23, 67'456'534, 0, 345'342, 456, 4356, 3, 7567, 2'532'865'138,
         }};
         Serialiser<List<std::uint32_t>> const serialiser;
@@ -70,7 +69,7 @@ namespace serialpp::test {
             0x00, 0x00,     // Size
             0x00, 0x00      // Offset
         };
-        auto const deserialiser = deserialise<List<std::int32_t>>(std::as_bytes(std::span{buffer}));
+        auto const deserialiser = deserialise<List<std::int32_t>>(as_const_bytes_view(buffer));
         test_assert(deserialiser.size() == 0);
     }
 
@@ -85,7 +84,7 @@ namespace serialpp::test {
             0x36, 0xD1,
             0x71, 0xDA
         };
-        auto const deserialiser = deserialise<List<std::uint16_t>>(std::as_bytes(std::span{buffer}));
+        auto const deserialiser = deserialise<List<std::uint16_t>>(as_const_bytes_view(buffer));
         test_assert(deserialiser.size() == 5);
         std::array<std::uint16_t, 5> const expected_elements{49524, 23705, 25710, 53558, 55921};
         test_assert(std::ranges::equal(deserialiser.elements(), expected_elements));

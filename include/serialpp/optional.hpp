@@ -39,8 +39,10 @@ namespace serialpp {
                 return target.push_fixed_field<DataOffset>([relative_variable_offset](SerialiseTarget offset_target) {
                     auto const offset = to_data_offset(relative_variable_offset + 1);
                     return Serialiser<DataOffset>{}(offset, offset_target);
-                }).push_variable_field<T>([&source](SerialiseTarget value_target) {
-                    return Serialiser<T>{}(source.value(), value_target);
+                }).push_variable_fields<T>(1, [&source](SerialiseTarget variable_target) {
+                    return variable_target.push_fixed_field<T>([&source](SerialiseTarget value_target) {
+                        return Serialiser<T>{}(source.value(), value_target);
+                    });
                 });
             }
             else {

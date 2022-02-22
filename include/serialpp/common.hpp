@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <climits>
+#include <functional>
 #include <limits>
 #include <span>
 #include <utility>
@@ -57,7 +58,7 @@ namespace serialpp {
     struct DeserialiserBase {
         ConstBytesView fixed_data;      // The "fixed data section", which is the first FIXED_DATA_SIZE<T> bytes.
         ConstBytesView variable_data;   // The "variable data section", which is the rest of the buffer after the fixed data.
-    
+
         // Struct initialisation is still broken in C++20 -.-
         DeserialiserBase(ConstBytesView fixed_data, ConstBytesView variable_data) :
             fixed_data{fixed_data}, variable_data{variable_data}
@@ -149,6 +150,8 @@ namespace serialpp {
             return _field_variable_offset - _fixed_size;
         }
 
+        // TODO: make push functions higher-order functions?
+
         // Invokes func with a SerialiseTarget set up for a field of type T in the fixed data section.
         // Returns a SerialiseTarget set up for the next serialisation.
         template<Serialisable T>
@@ -156,7 +159,7 @@ namespace serialpp {
             constexpr auto new_field_fixed_size = FIXED_DATA_SIZE<T>;
             auto target = *this;
             target._field_fixed_size = new_field_fixed_size;
-            target = func(target);
+            target = std::invoke(func, std::as_const(target));
             // Note: recalculate exact fixed offset and size to avoid changing it multiple times for the same field when
             // nesting push_fixed_field() calls.
             target._field_fixed_offset = _field_fixed_offset + new_field_fixed_size;
@@ -165,23 +168,28 @@ namespace serialpp {
             return target;
         }
 
-        // Invokes func with a SerialiseTarget set up to for a field of type T in the variable data section.
+        // Invokes func with a SerialiseTarget set up to for count consecutive fields of type T in the variable data
+        // section.
         // Returns a SerialiseTarget set up for the next serialisation.
-        template<Serialisable T>
-        SerialiseTarget push_variable_field(Callable<SerialiseTarget, SerialiseTarget> auto&& func) const {
-            constexpr auto new_field_fixed_size = FIXED_DATA_SIZE<T>;
+        // If you are putting multiple fields into the variable data section, then you should use a single call to this
+        // function to do so, so that the fields' fixed data is allocated together (e.g. for List). Otherwise, if the
+        // fields allocate variable data, it will go inbetween the fixed data, and you won't know where each field
+        // starts.
+        template<Serialisable T, Callable<SerialiseTarget, SerialiseTarget> F>
+        SerialiseTarget push_variable_fields(std::size_t count, F&& func) const {
+            auto const fields_fixed_size = FIXED_DATA_SIZE<T> * count;
 
             assert(_buffer->span().size() >= _field_variable_offset);
             auto const free_variable_buffer = _buffer->span().size() - _field_variable_offset;
-            if (free_variable_buffer < new_field_fixed_size) {
-                _buffer->extend(new_field_fixed_size - free_variable_buffer);
+            if (free_variable_buffer < fields_fixed_size) {
+                _buffer->extend(fields_fixed_size - free_variable_buffer);
             }
 
             auto target = *this;
             target._field_fixed_offset = _field_variable_offset;
-            target._field_fixed_size = new_field_fixed_size;
-            target._field_variable_offset = _field_variable_offset + new_field_fixed_size;
-            target = func(target);
+            target._field_fixed_size = fields_fixed_size;
+            target._field_variable_offset = _field_variable_offset + fields_fixed_size;
+            target = std::invoke(func, std::as_const(target));
 
             // All subfield data went into the variable data section and not the fixed data section,
             // so we revert the fixed section but keep the new variable section.
@@ -192,13 +200,13 @@ namespace serialpp {
 
         [[nodiscard]]
         friend auto operator<=>(SerialiseTarget const& lhs, SerialiseTarget const& rhs) = default;
-    
+
     private:
         SerialiseBuffer* _buffer;
-        std::size_t _fixed_size;            // Size of fixed data section
-        std::size_t _field_fixed_offset;    // Offset of current field from start of buffer.
+        std::size_t _fixed_size;            // Size of fixed data section.
+        std::size_t _field_fixed_offset;    // Offset of current field's fixed data from start of buffer.
         std::size_t _field_fixed_size;		// Size of current field's fixed data.
-        std::size_t _field_variable_offset;	// Offset of current field from start of buffer.
+        std::size_t _field_variable_offset;	// Offset of current field's variable data from start of buffer.
     };
 
 

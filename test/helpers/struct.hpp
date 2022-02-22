@@ -8,7 +8,7 @@
 
 namespace serialpp::test {
 
-    struct TestStruct : SerialisableStruct<
+    struct BasicTestStruct : SerialisableStruct<
         Field<"a", std::int8_t>,
         Field<"foo", std::uint32_t>,
         Field<"my field", std::int16_t>,

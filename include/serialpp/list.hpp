@@ -1,6 +1,8 @@
 #pragma once
 
+#include <array>
 #include <cassert>
+#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
@@ -24,6 +26,8 @@ namespace serialpp {
             If the element count is 0, then the offset is unused and no variable data is present.
     */
 
+    // TODO: maybe put list size in variable data? Could use variable integer encoding to allow larger size
+
 
     using ListSizeType = std::uint16_t;
 
@@ -36,7 +40,7 @@ namespace serialpp {
     }
 
 
-    // Variable-length homogeneous array. Can hold up to 2^16 - 1 elements.
+    // Serialisable variable-length homogeneous array. Can hold up to 2^16 - 1 elements.
     template<Serialisable T>
     struct List {
         using SizeType = ListSizeType;
@@ -52,10 +56,23 @@ namespace serialpp {
     class SerialiseSource<List<T>> {
     public:
         // TODO: does this really need type erasure?
+        // TODO: optimisation for specific range types
+        // TODO: copyable
+
+        SerialiseSource() :     // TODO: don't allocate?
+            SerialiseSource{std::ranges::views::empty<SerialiseSource<T>>}
+        {}
 
         template<class R>
+            requires std::ranges::forward_range<R> && std::ranges::sized_range<R>
+                && std::convertible_to<std::ranges::range_reference_t<R>, SerialiseSource<T> const&>
         SerialiseSource(R&& range) :
             _range{std::make_unique<RangeWrapper<std::remove_cvref_t<R>>>(std::forward<R>(range))}
+        {}
+
+        template<std::size_t N>
+        SerialiseSource(SerialiseSource<T> (&& elements)[N]) :
+            _range{std::make_unique<RangeWrapper<std::array<SerialiseSource<T>, N>>>(std::to_array(std::move(elements)))}
         {}
 
     private:
@@ -63,16 +80,26 @@ namespace serialpp {
             SerialiseTarget target;
 
             template<class R>
-            std::pair<SerialiseTarget, std::size_t> operator()(R& range) const {
-                std::size_t count = 0;
-                auto target = this->target;
-                for (auto const& element : range) {
-                    target = target.push_variable_field<T>([&element](SerialiseTarget element_target) {
-                        return Serialiser<T>{}(element, element_target);
+            std::pair<SerialiseTarget, std::size_t> operator()(R&& range) const {
+                std::size_t count = std::ranges::size(range);
+                // Keep track of real count if for some bizarre reason range size is wrong.
+                std::size_t actual_count = 0;
+                auto const target = this->target.push_variable_fields<T>(count,
+                    [&range, count, &actual_count](SerialiseTarget variable_target) {
+                        auto element_it = std::ranges::cbegin(range);
+                        auto const end_it = std::ranges::cend(range);
+                        while (actual_count < count && element_it != end_it) {
+                            auto const& element = *element_it;
+                            variable_target = variable_target.push_fixed_field<T>(
+                                [&element](SerialiseTarget element_target) {
+                                    return Serialiser<T>{}(element, element_target);
+                                });
+                            ++actual_count;
+                            ++element_it;
+                        }
+                        return variable_target;
                     });
-                    ++count;
-                }
-                return {target, count};
+                return {target, actual_count};
             }
         };
 
@@ -86,8 +113,9 @@ namespace serialpp {
         struct RangeWrapper : RangeWrapperBase {
             R range;
 
-            RangeWrapper(R range) :
-                range{std::move(range)}
+            template<typename... Args>
+            RangeWrapper(Args&&... args) :
+                range{std::forward<Args>(args)...}
             {}
 
             std::pair<SerialiseTarget, std::size_t> visit(Visitor const& visitor) override {
@@ -126,13 +154,13 @@ namespace serialpp {
             return Deserialiser<ListSizeType>{fixed_data, variable_data}.value();
         }
 
-        // Deserialises the element at the index. index must be < size().
+        // Deserialises the element at the specified index. index must be < size().
         [[nodiscard]]
         auto operator[](std::size_t index) const {
             assert(index < size());
             auto const offset = _offset();
             Deserialiser<T> const deserialiser{
-                variable_data.subspan(offset + FIXED_DATA_SIZE<T> * index),
+                variable_data.subspan(offset + FIXED_DATA_SIZE<T> * index, FIXED_DATA_SIZE<T>),
                 variable_data
             };
             return auto_deserialise_scalar(deserialiser);

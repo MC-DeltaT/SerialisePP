@@ -29,6 +29,13 @@ namespace serialpp::test {
         return v1.data() == v2.data() && v1.size() == v2.size();
     }
 
+
+    template<class R>
+    [[nodiscard]]
+    ConstBytesView as_const_bytes_view(R const& range) {
+        return std::as_bytes(std::span{range});
+    }
+
 }
 
 namespace serialpp {

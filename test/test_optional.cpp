@@ -1,7 +1,6 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
-#include <span>
 
 #include <serialpp/common.hpp>
 #include <serialpp/optional.hpp>
@@ -53,7 +52,7 @@ namespace serialpp::test {
 
     STEST_CASE(Deserialiser_Optional_Empty) {
         std::array<unsigned char, 2> const buffer{0x00, 0x00};
-        auto const deserialiser = deserialise<Optional<std::uint64_t>>(std::as_bytes(std::span{buffer}));
+        auto const deserialiser = deserialise<Optional<std::uint64_t>>(as_const_bytes_view(buffer));
         test_assert(!deserialiser.has_value());
     }
 
@@ -63,7 +62,7 @@ namespace serialpp::test {
             0x11, 0x22, 0x33, 0x44,     // Dummy padding
             0xFE, 0xDC      // Optional value
         };
-        auto const deserialiser = deserialise<Optional<std::int16_t>>(std::as_bytes(std::span{buffer}));
+        auto const deserialiser = deserialise<Optional<std::int16_t>>(as_const_bytes_view(buffer));
         test_assert(deserialiser.has_value());
         test_assert(deserialiser.value() == -8962);
     }

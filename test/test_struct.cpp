@@ -1,5 +1,4 @@
 #include <array>
-#include <span>
 
 #include <serialpp/common.hpp>
 #include <serialpp/struct.hpp>
@@ -11,10 +10,10 @@
 
 namespace serialpp::test {
 
-    static_assert(FIXED_DATA_SIZE<TestStruct> == 15);
+    static_assert(FIXED_DATA_SIZE<BasicTestStruct> == 1 + 4 + 2 + 8);
 
     STEST_CASE(SerialiseSource_Struct) {
-        SerialiseSource<TestStruct> source{std::int8_t{1}, std::uint32_t{2u}, std::int16_t{3}, std::uint64_t{4u}};
+        SerialiseSource<BasicTestStruct> source{std::int8_t{1}, std::uint32_t{2u}, std::int16_t{3}, std::uint64_t{4u}};
         test_assert(source.get<"a">() == 1);
         test_assert(source.get<"foo">() == 2u);
         test_assert(source.get<"my field">() == 3);
@@ -30,14 +29,14 @@ namespace serialpp::test {
 
     STEST_CASE(Serialiser_Struct) {
         SerialiseBuffer buffer;
-        auto const target = buffer.initialise<TestStruct>();
-        SerialiseSource<TestStruct> const source{
+        auto const target = buffer.initialise<BasicTestStruct>();
+        SerialiseSource<BasicTestStruct> const source{
             std::int8_t{-34},
             std::uint32_t{206'000u},
             std::int16_t{36},
             std::uint64_t{360'720u}
         };
-        Serialiser<TestStruct> const serialiser;
+        Serialiser<BasicTestStruct> const serialiser;
         auto const new_target = serialiser(source, target);
 
         SerialiseTarget const expected_target{buffer, 15, 15, 0, 15};
@@ -58,7 +57,7 @@ namespace serialpp::test {
             0x30, 0x75,             // my field
             0xFF, 0xE7, 0x76, 0x48, 0x17, 0x00, 0x00, 0x00  // qux
         };
-        auto const deserialiser = deserialise<TestStruct>(std::as_bytes(std::span{buffer}));
+        auto const deserialiser = deserialise<BasicTestStruct>(as_const_bytes_view(buffer));
         test_assert(deserialiser.get<"a">() == -100);
         test_assert(deserialiser.get<"foo">() == 123'456'789u);
         test_assert(deserialiser.get<"my field">() == 30000);
