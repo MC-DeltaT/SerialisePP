@@ -28,7 +28,9 @@ namespace serialpp {
 
 
     template<Serialisable T>
-    struct SerialiseSource<Optional<T>> : std::optional<SerialiseSource<T>> {};
+    struct SerialiseSource<Optional<T>> : std::optional<SerialiseSource<T>> {
+        using std::optional<SerialiseSource<T>>::optional;
+    };
 
 
     template<Serialisable T>

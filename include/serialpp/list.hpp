@@ -154,6 +154,12 @@ namespace serialpp {
             return Deserialiser<ListSizeType>{fixed_data, variable_data}.value();
         }
 
+        // Checks if the List contains no elements.
+        [[nodiscard]]
+        bool empty() const {
+            return size() == 0;
+        }
+
         // Deserialises the element at the specified index. index must be < size().
         [[nodiscard]]
         auto operator[](std::size_t index) const {

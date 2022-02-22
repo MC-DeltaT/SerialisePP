@@ -71,6 +71,8 @@ namespace serialpp::test {
         };
         auto const deserialiser = deserialise<List<std::int32_t>>(as_const_bytes_view(buffer));
         test_assert(deserialiser.size() == 0);
+        test_assert(deserialiser.empty());
+        test_assert(deserialiser.elements().empty());
     }
 
     STEST_CASE(Deserialiser_List_Nonempty) {
@@ -86,6 +88,7 @@ namespace serialpp::test {
         };
         auto const deserialiser = deserialise<List<std::uint16_t>>(as_const_bytes_view(buffer));
         test_assert(deserialiser.size() == 5);
+        test_assert(!deserialiser.empty());
         std::array<std::uint16_t, 5> const expected_elements{49524, 23705, 25710, 53558, 55921};
         test_assert(std::ranges::equal(deserialiser.elements(), expected_elements));
     }

@@ -97,17 +97,26 @@ namespace serialpp {
     struct HasElement : std::bool_constant<requires { impl::get<Name>(std::declval<Tuple>()); }> {};
 
 
+    namespace impl {
+
+        // Silly class needed for NamedTuple on MSVC, where a base class name (Es) will shadow a template parameter
+        // (pretty sure it's a bug).
+        template<typename T>
+        struct DeferredBase : T {};
+
+    }
+
+
     // A tuple where each element is associated with a name given by a ConstantString.
     // Inspired by "Beyond struct: Meta-programming a struct Replacement in C++20" by John Bandela: https://youtu.be/FXfrojjIo80
     template<class... Es> requires (IsNamedTupleElement<Es>::value && ...)
-    struct NamedTuple : Es...  {
+    struct NamedTuple : impl::DeferredBase<Es>...  {
         using Elements = TypeList<Es...>;
 
         constexpr NamedTuple() = default;
 
-        template<typename... Args> requires (sizeof...(Args) == sizeof...(Es))
-        constexpr NamedTuple(Args&&... args) :
-            Es{std::forward<Args>(args)}...
+        constexpr NamedTuple(typename Es::Type... elements) :
+            impl::DeferredBase<Es>{std::move(elements)}...
         {}
 
         // Gets an element by name.
