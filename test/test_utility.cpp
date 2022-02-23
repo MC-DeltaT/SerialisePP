@@ -1,6 +1,9 @@
 #include <algorithm>
+#include <cstdint>
 #include <string>
 #include <string_view>
+#include <typeinfo>
+#include <utility>
 
 #include <serialpp/utility.hpp>
 
@@ -85,6 +88,97 @@ namespace serialpp::test {
             NamedTupleElement<"my_str", std::string>>;
 
         static_assert(!CanGetNamedTuple<Tuple, "oh no">);
+    }
+
+
+    static_assert(!std::constructible_from<
+        SmallAny<3, 8, MockSmallAnyVisitor<std::uint64_t>>,
+        std::in_place_type_t<std::uint64_t>,
+        std::uint64_t>);
+    static_assert(!std::constructible_from<
+        SmallAny<8, 1, MockSmallAnyVisitor<std::uint64_t>>,
+        std::in_place_type_t<std::uint64_t>,
+        std::uint64_t>);
+    static_assert(std::constructible_from<
+        SmallAny<8, 8, MockSmallAnyVisitor<std::uint64_t>>,
+        std::in_place_type_t<std::uint64_t>,
+        std::uint64_t>);
+
+    STEST_CASE(SmallAny_ConstructDestruct) {
+        std::size_t constructions = 0;
+        std::size_t destructions = 0;
+        {
+            SmallAny<sizeof(LifecycleObserver), alignof(LifecycleObserver), MockSmallAnyVisitor<LifecycleObserver>>
+                const any{std::in_place_type<LifecycleObserver>, constructions, destructions, 13};
+            test_assert(constructions == 1);
+            test_assert(destructions == 0);
+        }
+        test_assert(constructions == 1);
+        test_assert(destructions == 1);
+    }
+
+    STEST_CASE(SmallAny_MoveConstruct) {
+        std::size_t constructions = 0;
+        std::size_t destructions = 0;
+        {
+            SmallAny<sizeof(LifecycleObserver), alignof(LifecycleObserver), MockSmallAnyVisitor<LifecycleObserver>>
+                any1{std::in_place_type<LifecycleObserver>, constructions, destructions, 13};
+            test_assert(constructions == 1);
+            test_assert(destructions == 0);
+            decltype(any1) const any2{std::move(any1)};
+            test_assert(constructions == 1);
+            test_assert(destructions == 1);
+            
+            MockSmallAnyVisitor<LifecycleObserver> visitor;
+            any2.visit(visitor);
+            test_assert(visitor.value);
+            test_assert(visitor.value->tag.has_value());
+            test_assert(visitor.value->tag.value() == 13);
+        }
+        test_assert(constructions == 1);
+        test_assert(destructions == 2);
+    }
+
+    STEST_CASE(SmallAny_VisitNonConst) {
+        std::size_t constructions = 0;
+        std::size_t destructions = 0;
+        {
+            SmallAny<sizeof(LifecycleObserver), alignof(LifecycleObserver), MockSmallAnyVisitor<LifecycleObserver>>
+                any{std::in_place_type<LifecycleObserver>, constructions, destructions, 13};
+            test_assert(constructions == 1);
+            test_assert(destructions == 0);
+            
+            MockSmallAnyVisitor<LifecycleObserver> visitor;
+            any.visit(visitor);
+            test_assert(visitor.value);
+            test_assert(visitor.value->tag.has_value());
+            test_assert(visitor.value->tag.value() == 13);
+            test_assert(visitor.type);
+            test_assert(*visitor.type == typeid(LifecycleObserver&));
+        }
+        test_assert(constructions == 1);
+        test_assert(destructions == 1);
+    }
+
+    STEST_CASE(SmallAny_VisitConst) {
+        std::size_t constructions = 0;
+        std::size_t destructions = 0;
+        {
+            SmallAny<sizeof(LifecycleObserver), alignof(LifecycleObserver), MockSmallAnyVisitor<LifecycleObserver>>
+                const any{std::in_place_type<LifecycleObserver>, constructions, destructions, 13};
+            test_assert(constructions == 1);
+            test_assert(destructions == 0);
+            
+            MockSmallAnyVisitor<LifecycleObserver> visitor;
+            any.visit(visitor);
+            test_assert(visitor.value);
+            test_assert(visitor.value->tag.has_value());
+            test_assert(visitor.value->tag.value() == 13);
+            test_assert(visitor.type);
+            test_assert(*visitor.type == typeid(LifecycleObserver const&));
+        }
+        test_assert(constructions == 1);
+        test_assert(destructions == 1);
     }
 
 }

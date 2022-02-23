@@ -2,6 +2,9 @@
 #include <array>
 #include <cstdint>
 #include <ranges>
+#include <unordered_set>
+#include <utility>
+#include <vector>
 
 #include <serialpp/common.hpp>
 #include <serialpp/list.hpp>
@@ -15,6 +18,44 @@ namespace serialpp::test {
 
     static_assert(FIXED_DATA_SIZE<List<std::int8_t>> == 2 + 2);
     static_assert(FIXED_DATA_SIZE<List<MockSerialisable<1000>>> == 2 + 2);
+
+    STEST_CASE(SerialiseSource_List_DefaultConstruct) {
+        SerialiseSource<List<int>> const source{};
+    }
+
+    STEST_CASE(SerialiseSource_List_BracedInit) {
+        SerialiseSource<List<long>> const source1{{1, 2u, 'c'}};
+        SerialiseSource<List<long>> const source2{{1}};
+    }
+
+    STEST_CASE(SerialiseSource_List_ViewSmallRange) {
+        std::vector<int> const v;
+        auto const r = std::ranges::ref_view(v);
+        SerialiseSource<List<long>> const source{r};
+    }
+
+    STEST_CASE(SerialiseSource_List_ViewLargeRange) {
+        std::unordered_set<int> set{1, 2, 3};
+        SerialiseSource<List<long>> const source{set};
+        test_assert(!set.empty());
+    }
+
+    STEST_CASE(SerialiseSource_List_OwnSmallRange) {
+        std::vector<int> const v;
+        auto const r = std::ranges::ref_view(v);
+        SerialiseSource<List<long>> const source{std::move(r)};
+    }
+
+    STEST_CASE(SerialiseSource_List_OwnLargeRange) {
+        std::unordered_set<int> set{1, 2, 3};
+        SerialiseSource<List<long>> const source{std::move(set)};
+        test_assert(set.empty());
+    }
+
+    STEST_CASE(SerialiseSource_List_OwnEmptyRange) {
+        std::vector<int> v;
+        SerialiseSource<List<long>> const source{std::move(v)};
+    }
 
     STEST_CASE(Serialiser_List_Empty) {
         SerialiseBuffer buffer;

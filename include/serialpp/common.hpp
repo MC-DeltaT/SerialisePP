@@ -175,8 +175,9 @@ namespace serialpp {
         // function to do so, so that the fields' fixed data is allocated together (e.g. for List). Otherwise, if the
         // fields allocate variable data, it will go inbetween the fixed data, and you won't know where each field
         // starts.
-        template<Serialisable T, Callable<SerialiseTarget, SerialiseTarget> F>
-        SerialiseTarget push_variable_fields(std::size_t count, F&& func) const {
+        template<Serialisable T>
+        SerialiseTarget push_variable_fields(std::size_t count,
+                Callable<SerialiseTarget, SerialiseTarget> auto&& func) const {
             auto const fields_fixed_size = FIXED_DATA_SIZE<T> * count;
 
             assert(_buffer->span().size() >= _field_variable_offset);

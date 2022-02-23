@@ -1,8 +1,10 @@
 #pragma once
 
 #include <algorithm>
+#include <cassert>
 #include <concepts>
 #include <cstddef>
+#include <cstring>
 #include <string_view>
 #include <type_traits>
 #include <utility>
@@ -131,6 +133,87 @@ namespace serialpp {
         [[nodiscard]]
         constexpr auto&& get() const noexcept requires HasElement<NamedTuple, Name>::value {
             return impl::get<Name>(*this);
+        }
+    };
+
+
+    // Wrapper for a small value of any type (to avoid allocating on the heap), with support for visiting the value.
+    template<std::size_t MaxSize, std::size_t Align, typename Visitor>
+    class SmallAny {
+    public:
+        using VisitorType = Visitor;
+
+        static constexpr std::size_t MAX_SIZE = MaxSize;
+        static constexpr std::size_t ALIGN = Align;
+
+        template<typename T, typename... Args>
+            requires (sizeof(T) <= MaxSize) && (alignof(T) <= Align) && std::constructible_from<T, Args...>
+        SmallAny(std::in_place_type_t<T>, Args&&... args) :
+            _visitor_func{&_generic_visitor_func<T>}
+        {
+            new(_data) T(std::forward<Args>(args)...);
+        }
+
+        ~SmallAny() {
+            _destruct();
+        }
+
+        SmallAny(SmallAny&& other) noexcept :
+            _visitor_func{other._visitor_func}
+        {
+            // No need to move data if other was empty.
+            if (_visitor_func) {
+                std::memcpy(_data, other._data, sizeof(_data));
+                other._destruct();
+                other._visitor_func = nullptr;
+            }
+        }
+
+        SmallAny(SmallAny const&) = delete;
+
+        SmallAny& operator=(SmallAny&&) = delete;
+        SmallAny& operator=(SmallAny const&) = delete;
+        
+        void visit(Visitor& visitor) {
+            assert(_visitor_func);
+            _visitor_func(_data, false, true, &visitor);
+        }
+
+        void visit(Visitor& visitor) const {
+            assert(_visitor_func);
+            _visitor_func(_data, true, true, &visitor);
+        }
+
+    private:
+        alignas(Align) char _data[MaxSize];
+        void (*_visitor_func)(void const*, bool, bool, Visitor*);
+
+        void _destruct() noexcept {
+            if (_visitor_func) {
+                _visitor_func(_data, false, false, nullptr);
+            }
+        }
+
+        template<typename T>
+        static void _generic_visitor_func(void const* data, bool is_const, bool operation, Visitor* visitor) {
+            if (is_const) {
+                auto const p = static_cast<T const*>(data);
+                if (operation) {
+                    (*visitor)(*p);
+                }
+                else {
+                    p->~T();
+                }
+            }
+            else {
+                auto const p = static_cast<T*>(const_cast<void*>(data));
+                if (operation) {
+                    (*visitor)(*p);
+                }
+                else {
+                    p->~T();
+                }
+            }
         }
     };
 

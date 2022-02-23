@@ -7,9 +7,11 @@
 #include <cstdint>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <ranges>
 #include <type_traits>
 #include <utility>
+#include <variant>
 
 #include "common.hpp"
 #include "scalar.hpp"
@@ -52,35 +54,55 @@ namespace serialpp {
         : SizeTConstant<FIXED_DATA_SIZE<ListSizeType> + FIXED_DATA_SIZE<DataOffset>> {};
 
 
+    template<typename R, typename T>
+    concept ListSerialiseSourceRange = std::ranges::forward_range<R> && std::ranges::sized_range<R>
+        && std::convertible_to<std::ranges::range_reference_t<R>, SerialiseSource<T> const&>;
+
+
     template<Serialisable T>
     class SerialiseSource<List<T>> {
     public:
-        // TODO: does this really need type erasure?
-        // TODO: optimisation for specific range types
         // TODO: copyable
 
-        SerialiseSource() :     // TODO: don't allocate?
-            SerialiseSource{std::ranges::views::empty<SerialiseSource<T>>}
+        // Constructs with 0 elements.
+        SerialiseSource() :
+            _range{EmptyRange{}}
         {}
 
-        template<class R>
-            requires std::ranges::forward_range<R> && std::ranges::sized_range<R>
-                && std::convertible_to<std::ranges::range_reference_t<R>, SerialiseSource<T> const&>
-        SerialiseSource(R&& range) :
-            _range{std::make_unique<RangeWrapper<std::remove_cvref_t<R>>>(std::forward<R>(range))}
-        {}
-
+        // Constructs from the elements of a braced-init-list.
         template<std::size_t N>
         SerialiseSource(SerialiseSource<T> (&& elements)[N]) :
-            _range{std::make_unique<RangeWrapper<std::array<SerialiseSource<T>, N>>>(std::to_array(std::move(elements)))}
-        {}
+            _range{EmptyRange{}}
+        {
+            _initialise_from_generic_range(std::to_array(std::move(elements)));
+        }
+
+        // Constructs from the elements of a range.
+        // If the range is safe to view, then a view is taken (i.e. this object won't own the elements).
+        // Otherwise the range is moved or copied from.
+        template<class R> requires ListSerialiseSourceRange<R, T>
+        SerialiseSource(R&& range) :
+            _range{EmptyRange{}}
+        {
+            if constexpr (std::ranges::viewable_range<R>) {
+                _initialise_from_generic_range(std::ranges::ref_view(range));
+            }
+            else {
+                _initialise_from_generic_range(std::forward<R>(range));
+            }
+        }
 
     private:
-        struct Visitor {
+        struct SerialiseVisitResult {
+            SerialiseTarget new_target;
+            std::size_t element_count;
+        };
+
+        struct SerialiseVisitorImpl {
             SerialiseTarget target;
 
-            template<class R>
-            std::pair<SerialiseTarget, std::size_t> operator()(R&& range) const {
+            template<typename R>
+            SerialiseVisitResult operator()(R&& range) const {
                 std::size_t count = std::ranges::size(range);
                 // Keep track of real count if for some bizarre reason range size is wrong.
                 std::size_t actual_count = 0;
@@ -103,27 +125,89 @@ namespace serialpp {
             }
         };
 
-        struct RangeWrapperBase {
-            virtual ~RangeWrapperBase() = default;
+        // Tag for no/empty range (i.e. from default construction).
+        struct EmptyRange {};
 
-            virtual std::pair<SerialiseTarget, std::size_t> visit(Visitor const& visitor) = 0;
+        struct SmallRangeVisitor {
+            SerialiseVisitorImpl const& visitor;
+            std::optional<SerialiseVisitResult> result;     // Can't default construct SerialiseTarget
+
+            template<typename T>
+            void operator()(T&& range) {
+                result = visitor(range);
+            }
+        };
+
+        // Probably most importantly, std::vector is 24 bytes on GCC, Clang, and MSVC.
+        using SmallRangeWrapper = SmallAny<24, 8, SmallRangeVisitor>;
+
+        struct LargeRangeWrapperBase {
+            virtual ~LargeRangeWrapperBase() = default;
+
+            virtual SerialiseVisitResult visit(SerialiseVisitorImpl const& visitor) const = 0;
         };
 
         template<class R>
-        struct RangeWrapper : RangeWrapperBase {
+        struct LargeRangeWrapper : LargeRangeWrapperBase {
             R range;
 
             template<typename... Args>
-            RangeWrapper(Args&&... args) :
+            LargeRangeWrapper(Args&&... args) :
                 range{std::forward<Args>(args)...}
             {}
 
-            std::pair<SerialiseTarget, std::size_t> visit(Visitor const& visitor) override {
+            SerialiseVisitResult visit(SerialiseVisitorImpl const& visitor) const override {
                 return visitor(range);
             }
         };
 
-        std::unique_ptr<RangeWrapperBase> _range;
+        struct SerialiseVisitor : SerialiseVisitorImpl {
+            SerialiseVisitResult operator()(EmptyRange) const noexcept {
+                return {this->target, 0};       // Weirdly, target isn't found by unqualified lookup in MSVC.
+            }
+
+            SerialiseVisitResult operator()(SmallRangeWrapper const& wrapper) const {
+                SmallRangeVisitor visitor{*this};
+                wrapper.visit(visitor);
+                return visitor.result.value();
+            }
+
+            SerialiseVisitResult operator()(std::unique_ptr<LargeRangeWrapperBase> const& wrapper) const {
+                assert(wrapper);
+                return wrapper->visit(*this);
+            }
+        };
+
+        // The most common range types are small, so we can often avoid allocating on the heap.
+        std::variant<
+            EmptyRange,
+            SmallRangeWrapper,
+            std::unique_ptr<LargeRangeWrapperBase>
+        > _range;
+
+        template<typename R>
+        void _initialise_from_generic_range(R&& range) {
+            using RangeType = std::remove_cvref_t<R>;
+            // If we're owning the elements and it's empty, just store EmptyRange instead.
+            if (!std::ranges::borrowed_range<R> && std::ranges::empty(range)) {
+                // _range already has EmptyRange.
+                assert(std::holds_alternative<EmptyRange>(_range));
+            }
+            // If the range object is small enough, put it in the stack-allocated buffer.
+            else if constexpr (std::constructible_from<SmallRangeWrapper, std::in_place_type_t<RangeType>, R&&>) {
+                // Use emplace() rather than assign to avoid a move, which isn't free for SmallRangeWrapper.
+                _range.emplace<SmallRangeWrapper>(std::in_place_type<RangeType>, std::forward<R>(range));
+            }
+            // Otherwise have to dynamically allocate space to type-erase the range.
+            else {
+                _range.emplace<std::unique_ptr<LargeRangeWrapperBase>>(
+                    new LargeRangeWrapper<RangeType>{std::forward<R>(range)});
+            }
+        }
+
+        SerialiseVisitResult _visit(SerialiseVisitor const& visitor) const {
+            return std::visit(visitor, _range);
+        }
 
         friend struct Serialiser<List<T>>;
     };
@@ -133,8 +217,8 @@ namespace serialpp {
         SerialiseTarget operator()(SerialiseSource<List<T>> const& source, SerialiseTarget target) const {
             auto const relative_variable_offset = target.relative_field_variable_offset();
 
-            typename SerialiseSource<List<T>>::Visitor const visitor{target};
-            auto const [new_target, element_count] = source._range->visit(visitor);
+            typename SerialiseSource<List<T>>::SerialiseVisitor const visitor{target};
+            auto const [new_target, element_count] = source._visit(visitor);
 
             return new_target.push_fixed_field<ListSizeType>([element_count](SerialiseTarget size_target) {
                 return Serialiser<ListSizeType>{}(to_list_size(element_count), size_target);

@@ -42,6 +42,8 @@ namespace serialpp {
 
     // TODO: is it an issue that nonscalar serialisers adjust the fixed data offset, but scalar serialisers do not?
 
+    // TODO: throw if deserialise buffer is too small, rather than assert
+
 
     /*
         Byte:
