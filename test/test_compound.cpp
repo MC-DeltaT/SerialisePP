@@ -233,7 +233,7 @@ namespace serialpp::test {
             0x1C, 0xBE, 0xA0, 0xF4, 0xE5, 0xFC, 0x05, 0x00  // struct1.opt_i64 value
         };
         auto const deserialiser = deserialise<CompoundTestStruct3>(as_const_bytes_view(buffer));
-        
+
         auto const struct2 = deserialiser.get<"struct2">();
 
         auto const struct2_struct1 = struct2.get<"struct1">();

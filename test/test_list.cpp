@@ -134,4 +134,26 @@ namespace serialpp::test {
         test_assert(std::ranges::equal(deserialiser.elements(), expected_elements));
     }
 
+    STEST_CASE(Deserialiser_List_OffsetOutOfRange) {
+        std::array<unsigned char, 20> const buffer{
+            0x05, 0x00,     // Size
+            0x10, 0x00,     // Offset
+            0x01, 0x02, 0x03, 0x04, 0x05, 0x06,     // Dummy padding
+            0x74, 0xC1,     // Elements
+            0x99, 0x5C,
+            0x6E, 0x64,
+            0x36, 0xD1,
+            0x71, 0xDA
+        };
+        auto const deserialiser = deserialise<List<std::uint16_t>>(as_const_bytes_view(buffer));
+        for (std::size_t i = 0; i < 5; ++i) {
+            test_assert_throws<VariableOffsetError>([&deserialiser, i] {
+                (void)deserialiser[i];
+            });
+        }
+        test_assert_throws<VariableOffsetError>([&deserialiser] {
+            std::ranges::for_each(deserialiser.elements(), [](auto) {});
+        });
+    }
+
 }

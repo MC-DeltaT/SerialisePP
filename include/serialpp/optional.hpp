@@ -57,12 +57,14 @@ namespace serialpp {
 
 
     template<Serialisable T>
-    struct Deserialiser<Optional<T>> : DeserialiserBase {
-        using DeserialiserBase::DeserialiserBase;
+    class Deserialiser<Optional<T>> : public DeserialiserBase<Optional<T>> {
+    public:
+        using DeserialiserBase<Optional<T>>::DeserialiserBase;
 
         // Checks if the Optional contains a value.
         [[nodiscard]]
         bool has_value() const {
+            // Note: does not check if the offset is valid.
             return _value_offset() > 0;
         }
 
@@ -72,10 +74,10 @@ namespace serialpp {
             auto offset = _value_offset();
             assert(offset > 0);
             offset -= 1;
-            assert(offset <= variable_data.size());
+            this->_check_variable_offset(offset);
             Deserialiser<T> const deserialiser{
-                variable_data.subspan(offset),
-                variable_data
+                this->_variable_data.subspan(offset),
+                this->_variable_data
             };
 
             return auto_deserialise_scalar(deserialiser);
@@ -86,7 +88,7 @@ namespace serialpp {
         // 0 indicates no contained value, i.e. empty optional.
         [[nodiscard]]
         DataOffset _value_offset() const {
-            return Deserialiser<DataOffset>{fixed_data, variable_data}.value();
+            return Deserialiser<DataOffset>{this->_fixed_data, this->_variable_data}.value();
         }
     };
 

@@ -84,9 +84,11 @@ namespace serialpp {
         SerialiseSource(R&& range) :
             _range{EmptyRange{}}
         {
-            if constexpr (std::ranges::viewable_range<R>) {
-                _initialise_from_generic_range(std::ranges::ref_view(range));
+            // If the range is viewable and it's not already a view, then make a view of it.
+            if constexpr (std::ranges::viewable_range<R> && !std::ranges::view<R>) {
+                _initialise_from_generic_range(std::ranges::ref_view(std::forward<R>(range)));
             }
+            // Otherwise move or copy the range into our storage.
             else {
                 _initialise_from_generic_range(std::forward<R>(range));
             }
@@ -229,13 +231,14 @@ namespace serialpp {
     };
 
     template<Serialisable T>
-    struct Deserialiser<List<T>> : DeserialiserBase {
-        using DeserialiserBase::DeserialiserBase;
+    class Deserialiser<List<T>> : public DeserialiserBase<List<T>> {
+    public:
+        using DeserialiserBase<List<T>>::DeserialiserBase;
 
         // Gets the number of elements in the List.
         [[nodiscard]]
         std::size_t size() const {
-            return Deserialiser<ListSizeType>{fixed_data, variable_data}.value();
+            return Deserialiser<ListSizeType>{this->_fixed_data, this->_variable_data}.value();
         }
 
         // Checks if the List contains no elements.
@@ -248,10 +251,12 @@ namespace serialpp {
         [[nodiscard]]
         auto operator[](std::size_t index) const {
             assert(index < size());
-            auto const offset = _offset();
+            auto const base_offset = _offset();
+            auto const element_offset = base_offset + FIXED_DATA_SIZE<T> * index;
+            this->_check_variable_offset(element_offset);
             Deserialiser<T> const deserialiser{
-                variable_data.subspan(offset + FIXED_DATA_SIZE<T> * index, FIXED_DATA_SIZE<T>),
-                variable_data
+                this->_variable_data.subspan(element_offset, FIXED_DATA_SIZE<T>),
+                this->_variable_data
             };
             return auto_deserialise_scalar(deserialiser);
         }
@@ -269,8 +274,8 @@ namespace serialpp {
         [[nodiscard]]
         DataOffset _offset() const {
             return Deserialiser<DataOffset>{
-                fixed_data.subspan(FIXED_DATA_SIZE<ListSizeType>),
-                variable_data
+                this->_fixed_data.subspan(FIXED_DATA_SIZE<ListSizeType>),
+                this->_variable_data
             }.value();
         }
     };

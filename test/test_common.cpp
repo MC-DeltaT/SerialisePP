@@ -170,9 +170,16 @@ namespace serialpp::test {
         std::array<std::byte, 10> const buffer{};
         auto const deserialiser = deserialise<MockSerialisable<7>>(buffer);
         ConstBytesView expected_fixed_data{buffer.data(), buffer.data() + 7};
-        test_assert(bytes_view_same(deserialiser.fixed_data, expected_fixed_data));
+        test_assert(bytes_view_same(deserialiser._fixed_data, expected_fixed_data));
         ConstBytesView expected_variable_data{buffer.data() + 7, buffer.data() + 10};
-        test_assert(bytes_view_same(deserialiser.variable_data, expected_variable_data));
+        test_assert(bytes_view_same(deserialiser._variable_data, expected_variable_data));
+    }
+
+    STEST_CASE(Deserialise_BufferTooSmall) {
+        std::array<std::byte, 10> const buffer{};
+        test_assert_throws<BufferSizeError>([&buffer]() {
+            deserialise<MockSerialisable<11>>(buffer);
+        });
     }
 
 }

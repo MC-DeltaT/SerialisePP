@@ -67,4 +67,16 @@ namespace serialpp::test {
         test_assert(deserialiser.value() == -8962);
     }
 
+    STEST_CASE(Deserialiser_Optional_OffsetOutOfRange) {
+        std::array<unsigned char, 8> const buffer{
+            0x07, 0x00,     // Optional value offset
+            0x11, 0x22, 0x33, 0x44,     // Dummy padding
+            0xFE, 0xDC      // Optional value
+        };
+        auto const deserialiser = deserialise<Optional<std::int16_t>>(as_const_bytes_view(buffer));
+        test_assert_throws<VariableOffsetError>([&deserialiser] {
+            (void)deserialiser.value();
+        });
+    }
+
 }

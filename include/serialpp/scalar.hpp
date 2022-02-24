@@ -42,8 +42,6 @@ namespace serialpp {
 
     // TODO: is it an issue that nonscalar serialisers adjust the fixed data offset, but scalar serialisers do not?
 
-    // TODO: throw if deserialise buffer is too small, rather than assert
-
 
     /*
         Byte:
@@ -64,14 +62,15 @@ namespace serialpp {
     };
 
     template<>
-    struct Deserialiser<std::byte> : DeserialiserBase {
-        using DeserialiserBase::DeserialiserBase;
+    class Deserialiser<std::byte> : public DeserialiserBase<std::byte> {
+    public:
+        using DeserialiserBase<std::byte>::DeserialiserBase;
 
         // Deserialises the value.
         [[nodiscard]]
         std::byte value() const {
-            assert(fixed_data.size() >= 1);
-            return fixed_data[0];
+            assert(_fixed_data.size() >= 1);
+            return _fixed_data[0];
         }
     };
 
@@ -100,16 +99,17 @@ namespace serialpp {
     };
 
     template<std::unsigned_integral U>
-    struct Deserialiser<U> : DeserialiserBase {
-        using DeserialiserBase::DeserialiserBase;
+    class Deserialiser<U> : public DeserialiserBase<U> {
+    public:
+        using DeserialiserBase<U>::DeserialiserBase;
 
         // Deserialises the value.
         [[nodiscard]]
         U value() const {
-            assert(fixed_data.size() >= sizeof(U));
+            assert(this->_fixed_data.size() >= sizeof(U));
             U value = 0;
             for (std::size_t i = 0; i < sizeof(U); ++i) {
-                value |= std::to_integer<U>(fixed_data[i]) << (i * 8);
+                value |= std::to_integer<U>(this->_fixed_data[i]) << (i * 8);
             }
             return value;
         }
@@ -127,7 +127,8 @@ namespace serialpp {
     };
 
     template<std::signed_integral S>
-    struct Deserialiser<S> : Deserialiser<std::make_unsigned_t<S>> {
+    class Deserialiser<S> : public Deserialiser<std::make_unsigned_t<S>> {
+    public:
         using Deserialiser<std::make_unsigned_t<S>>::Deserialiser;
 
         // Deserialises the value.
@@ -154,7 +155,8 @@ namespace serialpp {
     };
 
     template<>
-    struct Deserialiser<bool> : Deserialiser<std::uint8_t> {
+    class Deserialiser<bool> : public Deserialiser<std::uint8_t> {
+    public:
         using Deserialiser<std::uint8_t>::Deserialiser;
 
         // Deserialises the value.

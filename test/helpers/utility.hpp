@@ -44,7 +44,7 @@ namespace serialpp::test {
 
         LifecycleObserver& operator=(LifecycleObserver&&) = default;
         LifecycleObserver& operator=(LifecycleObserver const&) = default;
-    
+
     private:
         std::size_t* _constructions;
         std::size_t* _destructions;

@@ -173,7 +173,7 @@ namespace serialpp {
 
         SmallAny& operator=(SmallAny&&) = delete;
         SmallAny& operator=(SmallAny const&) = delete;
-        
+
         void visit(Visitor& visitor) {
             assert(_visitor_func);
             _visitor_func(_data, false, true, &visitor);

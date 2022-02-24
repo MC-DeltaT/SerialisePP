@@ -65,16 +65,20 @@ namespace serialpp {
     };
 
     template<std::size_t FixedSize>
-    struct Deserialiser<test::MockSerialisable<FixedSize>> : DeserialiserBase {
-        using DeserialiserBase::DeserialiserBase;
+    class Deserialiser<test::MockSerialisable<FixedSize>> : public DeserialiserBase<test::MockSerialisable<FixedSize>> {
+    public:
+        using DeserialiserBase<test::MockSerialisable<FixedSize>>::DeserialiserBase;
+
+        using DeserialiserBase<test::MockSerialisable<FixedSize>>::_fixed_data;
+        using DeserialiserBase<test::MockSerialisable<FixedSize>>::_variable_data;
     };
 
     template<std::size_t FixedSize>
     [[nodiscard]]
     constexpr bool operator==(Deserialiser<test::MockSerialisable<FixedSize>> const& lhs,
             Deserialiser<test::MockSerialisable<FixedSize>> const& rhs) {
-        return test::bytes_view_same(lhs.fixed_data, rhs.fixed_data)
-            && test::bytes_view_same(lhs.variable_data, rhs.variable_data);
+        return test::bytes_view_same(lhs._fixed_data, rhs._fixed_data)
+            && test::bytes_view_same(lhs._variable_data, rhs._variable_data);
     }
 
 

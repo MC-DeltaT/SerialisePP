@@ -163,18 +163,19 @@ namespace serialpp {
 
 
     template<Struct S>
-    struct Deserialiser<S> : DeserialiserBase {
-        using DeserialiserBase::DeserialiserBase;
+    class Deserialiser<S> : public DeserialiserBase<S> {
+    public:
+        using DeserialiserBase<S>::DeserialiserBase;
 
         // Gets a field by name.
         template<ConstantString Name>
         [[nodiscard]]
         auto get() const {
             constexpr auto offset = FIELD_OFFSET<S, Name>;
-            assert(offset <= fixed_data.size());
+            assert(offset <= this->_fixed_data.size());
             auto deserialiser = Deserialiser<FieldType<S, Name>>{
-                fixed_data.subspan(offset),
-                variable_data
+                this->_fixed_data.subspan(offset),
+                this->_variable_data
             };
             return auto_deserialise_scalar(deserialiser);
         }

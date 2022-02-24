@@ -5,9 +5,12 @@
 #include <cstddef>
 #include <cstdint>
 #include <climits>
+#include <format>
 #include <functional>
 #include <limits>
 #include <span>
+#include <stdexcept>
+#include <typeinfo>
 #include <utility>
 #include <vector>
 
@@ -35,6 +38,30 @@ namespace serialpp {
     }
 
 
+    class DeserialiseError : public std::runtime_error {
+    public:
+        using runtime_error::runtime_error;
+
+        ~DeserialiseError() = 0;
+    };
+
+    inline DeserialiseError::~DeserialiseError() = default;
+
+
+    // Indicates when a bytes buffer is the wrong size to deserialise the requested type.
+    class BufferSizeError : public DeserialiseError {
+    public:
+        using DeserialiseError::DeserialiseError;
+    };
+
+
+    // Indicates when an offset to the variable data section is out of range.
+    class VariableOffsetError : public DeserialiseError {
+    public:
+        using DeserialiseError::DeserialiseError;
+    };
+
+
     // The size in bytes of the fixed data section of a serialisable type (as an std::integral_constant).
     template<typename T>
     struct FixedDataSize;
@@ -55,14 +82,27 @@ namespace serialpp {
 
 
     // Helper for implementing Deserialiser.
-    struct DeserialiserBase {
-        ConstBytesView fixed_data;      // The "fixed data section", which is the first FIXED_DATA_SIZE<T> bytes.
-        ConstBytesView variable_data;   // The "variable data section", which is the rest of the buffer after the fixed data.
+    template<typename T>
+    class DeserialiserBase {
+    public:
+        constexpr DeserialiserBase(ConstBytesView fixed_data, ConstBytesView variable_data) noexcept :
+            _fixed_data{fixed_data}, _variable_data{variable_data}
+        {
+            check_deserialise_buffer_fixed_size<T>(_fixed_data);
+        }
 
-        // Struct initialisation is still broken in C++20 -.-
-        DeserialiserBase(ConstBytesView fixed_data, ConstBytesView variable_data) :
-            fixed_data{fixed_data}, variable_data{variable_data}
-        {}
+    protected:
+        ConstBytesView _fixed_data;
+        ConstBytesView _variable_data;
+
+        // Throws VariableOffsetError if offset is not within the bounds of the variable data buffer.
+        void _check_variable_offset(std::size_t offset) const {
+            if (offset >= _variable_data.size()) {
+                throw VariableOffsetError{
+                    std::format("Variable data offset {} is too large for buffer of size {}",
+                        offset, _variable_data.size())};
+            }
+        }
     };
 
 
@@ -81,6 +121,18 @@ namespace serialpp {
         requires Callable<Serialiser<T>, SerialiseTarget, SerialiseSource<T>, SerialiseTarget>;
         requires std::constructible_from<Deserialiser<T>, ConstBytesView, ConstBytesView>;
     };
+
+
+    // Throws BufferSizeError if buffer is too small to contain an instance of T.
+    template<Serialisable T>
+    void check_deserialise_buffer_fixed_size(ConstBytesView buffer) {
+        constexpr auto required_size = FIXED_DATA_SIZE<T>;
+        if (buffer.size() < required_size) {
+            throw BufferSizeError{
+                std::format("Buffer of size {} is too small to deserialise type {} of size {}",
+                    buffer.size(), typeid(T).name(), required_size)};
+        }
+    }
 
 
     // Buffer of bytes into which values are serialised.
@@ -225,9 +277,8 @@ namespace serialpp {
     template<Serialisable T>
     [[nodiscard]]
     Deserialiser<T> deserialise(ConstBytesView buffer) {
-        constexpr auto fixed_size = FIXED_DATA_SIZE<T>;
-        assert(buffer.size() >= fixed_size);
-        return Deserialiser<T>{buffer.first(fixed_size), buffer.subspan(fixed_size)};
+        check_deserialise_buffer_fixed_size<T>(buffer);
+        return Deserialiser<T>{buffer.first(FIXED_DATA_SIZE<T>), buffer.subspan(FIXED_DATA_SIZE<T>)};
     }
 
 }

@@ -128,7 +128,7 @@ namespace serialpp::test {
             decltype(any1) const any2{std::move(any1)};
             test_assert(constructions == 1);
             test_assert(destructions == 1);
-            
+
             MockSmallAnyVisitor<LifecycleObserver> visitor;
             any2.visit(visitor);
             test_assert(visitor.value);
@@ -147,7 +147,7 @@ namespace serialpp::test {
                 any{std::in_place_type<LifecycleObserver>, constructions, destructions, 13};
             test_assert(constructions == 1);
             test_assert(destructions == 0);
-            
+
             MockSmallAnyVisitor<LifecycleObserver> visitor;
             any.visit(visitor);
             test_assert(visitor.value);
@@ -168,7 +168,7 @@ namespace serialpp::test {
                 const any{std::in_place_type<LifecycleObserver>, constructions, destructions, 13};
             test_assert(constructions == 1);
             test_assert(destructions == 0);
-            
+
             MockSmallAnyVisitor<LifecycleObserver> visitor;
             any.visit(visitor);
             test_assert(visitor.value);
