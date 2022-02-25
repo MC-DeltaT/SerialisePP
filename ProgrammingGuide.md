@@ -100,7 +100,8 @@ If a nonscalar type `C` contains a scalar type `S`, then `Deserialiser<C>` won't
 
 `Deserialiser` for an `Optional<T>` has the following member functions:
  - `has_value()`: returns `true` if an instance of `T` is contained, otherwise it returns `false`.
- - `value()`: returns a `Deserialiser<T>` (or `T` for scalar `T`). May only be called if `has_value() == true`.
+ - `operator*`: returns a `Deserialiser<T>` (or `T` for scalar `T`). May only be called if `has_value() == true`.
+ - `value()`: like `operator*`, but throws `std::bad_optional_access` if `has_value() == false`.
 
 ### List
 
@@ -134,6 +135,7 @@ SerialiseSource<List<long>> const source{v};
  - `size()`: returns the number of elements.
  - `empty()`: returns `true` if there are 0 elements, `false` otherwise.
  - `operator[]`: returns a `Deserialiser<T>` (or `T` for scalar `T`) for an element at the specified index. The index must be in the range `[0, size())`.
+ - `at()`: like `operator[]` but throws `std::out_of_range` if the index is out of bounds.
  - `elements()`: returns a view of that yields `Deserialiser<T>` (or `T` for scalar `T`) for each element.
 
 ### Structs

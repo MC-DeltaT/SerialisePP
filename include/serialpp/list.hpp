@@ -5,10 +5,12 @@
 #include <concepts>
 #include <cstddef>
 #include <cstdint>
+#include <format>
 #include <limits>
 #include <memory>
 #include <optional>
 #include <ranges>
+#include <stdexcept>
 #include <type_traits>
 #include <utility>
 #include <variant>
@@ -33,6 +35,8 @@ namespace serialpp {
 
     using ListSizeType = std::uint16_t;
 
+    inline static constexpr std::size_t MAX_LIST_SIZE = std::numeric_limits<ListSizeType>::max();
+
 
     // Safely casts to ListSizeType.
     [[nodiscard]]
@@ -46,6 +50,8 @@ namespace serialpp {
     template<Serialisable T>
     struct List {
         using SizeType = ListSizeType;
+
+        static constexpr std::size_t MAX_SIZE = MAX_LIST_SIZE;
     };
 
 
@@ -63,7 +69,6 @@ namespace serialpp {
     class SerialiseSource<List<T>> {
     public:
         // TODO: copyable
-        // TODO: check range size upfront
 
         // Constructs with 0 elements.
         SerialiseSource() :
@@ -71,20 +76,22 @@ namespace serialpp {
         {}
 
         // Constructs from the elements of a braced-init-list.
-        template<std::size_t N>
+        template<std::size_t N> requires (N <= MAX_LIST_SIZE)
         SerialiseSource(SerialiseSource<T> (&& elements)[N]) :
             _range{EmptyRange{}}
         {
             _initialise_from_generic_range(std::to_array(std::move(elements)));
         }
 
-        // Constructs from the elements of a range.
+        // Constructs from the elements of a range. The range must have <= MAX_LIST_SIZE elements.
         // If the range is safe to view, then a view is taken (i.e. this object won't own the elements).
         // Otherwise the range is moved or copied from.
         template<class R> requires ListSerialiseSourceRange<R, T>
         SerialiseSource(R&& range) :
             _range{EmptyRange{}}
         {
+            assert(std::size(std::forward<R>(range)) <= MAX_LIST_SIZE);
+
             // If the range is viewable and it's not already a view, then make a view of it.
             if constexpr (std::ranges::viewable_range<R> && !std::ranges::view<R>) {
                 _initialise_from_generic_range(std::ranges::ref_view(std::forward<R>(range)));
@@ -248,7 +255,7 @@ namespace serialpp {
             return size() == 0;
         }
 
-        // Deserialises the element at the specified index. index must be < size().
+        // Gets the element at the specified index. index must be < size().
         [[nodiscard]]
         auto operator[](std::size_t index) const {
             assert(index < size());
@@ -262,7 +269,18 @@ namespace serialpp {
             return auto_deserialise_scalar(deserialiser);
         }
         
-        // TODO: at() for bounds checking
+        // Gets the element at the specified index. Throws std::out_of_range if index is out of bounds.
+        [[nodiscard]]
+        auto at(std::size_t index) const {
+            auto const size = this->size();
+            if (index < size) {
+                return (*this)[index];
+            }
+            else {
+                throw std::out_of_range{
+                    std::format("List index {} is out of bounds for size {}", index, size)};
+            }
+        }
 
         // Gets a view of the elements.
         [[nodiscard]]

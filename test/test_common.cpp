@@ -177,7 +177,7 @@ namespace serialpp::test {
 
     STEST_CASE(Deserialise_BufferTooSmall) {
         std::array<std::byte, 10> const buffer{};
-        test_assert_throws<FixedBufferSizeError>([&buffer]() {
+        test_assert_throws<FixedBufferSizeError>([&buffer] {
             (void)deserialise<MockSerialisable<11>>(buffer);
         });
     }

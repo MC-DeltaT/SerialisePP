@@ -70,8 +70,7 @@ namespace serialpp {
 
         // Gets the contained value. has_value() must be true.
         [[nodiscard]]
-        auto value() const {
-            // TODO: throw if empty?
+        auto operator*() const {
             auto offset = _value_offset();
             assert(offset > 0);
             offset -= 1;
@@ -84,7 +83,16 @@ namespace serialpp {
             return auto_deserialise_scalar(deserialiser);
         }
 
-        // TODO: operator*, operator-> ?
+        // Gets the contained value. If has_value() is false, throws std::bad_optional_access.
+        [[nodiscard]]
+        auto value() const {
+            if (has_value()) {
+                return **this;
+            }
+            else {
+                throw std::bad_optional_access{};
+            }
+        }
 
     private:
         // Offset from start of variable data section to contained value, plus 1.

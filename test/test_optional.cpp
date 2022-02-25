@@ -54,6 +54,9 @@ namespace serialpp::test {
         std::array<unsigned char, 2> const buffer{0x00, 0x00};
         auto const deserialiser = deserialise<Optional<std::uint64_t>>(as_const_bytes_view(buffer));
         test_assert(!deserialiser.has_value());
+        test_assert_throws<std::bad_optional_access>([&deserialiser] {
+            deserialiser.value();
+        });
     }
 
     STEST_CASE(Deserialiser_Optional_Nonempty) {
@@ -65,6 +68,7 @@ namespace serialpp::test {
         auto const deserialiser = deserialise<Optional<std::int16_t>>(as_const_bytes_view(buffer));
         test_assert(deserialiser.has_value());
         test_assert(deserialiser.value() == -8962);
+        test_assert(*deserialiser == -8962);
     }
 
     STEST_CASE(Deserialiser_Optional_OffsetOutOfRange) {

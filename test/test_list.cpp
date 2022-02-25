@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <ranges>
 #include <unordered_set>
@@ -114,6 +115,11 @@ namespace serialpp::test {
         test_assert(deserialiser.size() == 0);
         test_assert(deserialiser.empty());
         test_assert(deserialiser.elements().empty());
+        for (std::size_t i = 0; i < 100; ++i) {
+            test_assert_throws<std::out_of_range>([&deserialiser, i] {
+                (void)deserialiser.at(i);
+            });
+        }
     }
 
     STEST_CASE(Deserialiser_List_Nonempty) {
@@ -132,6 +138,21 @@ namespace serialpp::test {
         test_assert(!deserialiser.empty());
         std::array<std::uint16_t, 5> const expected_elements{49524, 23705, 25710, 53558, 55921};
         test_assert(std::ranges::equal(deserialiser.elements(), expected_elements));
+        test_assert(deserialiser[0] == 49524);
+        test_assert(deserialiser[1] == 23705);
+        test_assert(deserialiser[2] == 25710);
+        test_assert(deserialiser[3] == 53558);
+        test_assert(deserialiser[4] == 55921);
+        test_assert(deserialiser.at(0) == 49524);
+        test_assert(deserialiser.at(1) == 23705);
+        test_assert(deserialiser.at(2) == 25710);
+        test_assert(deserialiser.at(3) == 53558);
+        test_assert(deserialiser.at(4) == 55921);
+        for (std::size_t i = 5; i < 100; ++i) {
+            test_assert_throws<std::out_of_range>([&deserialiser, i] {
+                (void)deserialiser.at(i);
+            });
+        }
     }
 
     STEST_CASE(Deserialiser_List_OffsetOutOfRange) {
