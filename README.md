@@ -65,7 +65,7 @@ Add `path/to/SerialisePP/include` to your include directories.
 
 ### Code
 
-Please see `ProgrammingGuide.md` for detailed information.
+Please see [ProgrammingGuide.md](ProgrammingGuide.md) for detailed information.
 
 ## Tests
 
@@ -74,4 +74,4 @@ The test code is contained in `test/` and the CMake target is `SerialisePPTest`.
 
 ## Serialisation Format
 
-Please see `SerialisationFormat.md` for details on how C++ values are represented as bytes.
+Please see [SerialisationFormat.md](SerialisationFormat.md) for details on how C++ values are represented as bytes.
