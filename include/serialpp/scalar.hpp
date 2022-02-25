@@ -1,8 +1,11 @@
 #pragma once
 
+#include <algorithm>
+#include <bit>
 #include <concepts>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <type_traits>
 
 #include "common.hpp"
@@ -87,13 +90,24 @@ namespace serialpp {
     template<std::unsigned_integral U>
     struct Serialiser<U> {
         SerialiseTarget operator()(SerialiseSource<U> source, SerialiseTarget target) const {
-            // TODO: bit copy if machine endianness is little?
             auto const buffer = target.field_fixed_data();
             assert(buffer.size() >= sizeof(U));
-            auto value = source.value;
-            for (std::size_t i = 0; i < sizeof(U); ++i) {
-                buffer[i] = static_cast<std::byte>(value & 0xFFu);
-                value >>= 8;
+            // Compilers aren't always smart enough to figure out the bit shifting thing is just a copy.
+            if constexpr (std::endian::native == std::endian::little) {
+                std::memcpy(buffer.data(), &source.value, sizeof(U));
+            }
+            else if constexpr (std::endian::native == std::endian::big) {
+                auto const source_begin = reinterpret_cast<std::byte const*>(&source.value);
+                auto const source_end = source_begin + sizeof(U);
+                std::reverse_copy(source_begin, source_end, buffer.begin());
+            }
+            else {
+                // Mixed endianness.
+                auto value = source.value;
+                for (std::size_t i = 0; i < sizeof(U); ++i) {
+                    buffer[i] = static_cast<std::byte>(value & 0xFFu);
+                    value >>= 8;
+                }
             }
             return target;
         };
@@ -107,11 +121,20 @@ namespace serialpp {
         // Deserialises the value.
         [[nodiscard]]
         U value() const {
-            // TODO: bit copy if machine endianness is little?
             assert(this->_fixed_data.size() >= sizeof(U));
             U value = 0;
-            for (std::size_t i = 0; i < sizeof(U); ++i) {
-                value |= std::to_integer<U>(this->_fixed_data[i]) << (i * 8);
+            if constexpr (std::endian::native == std::endian::little) {
+                std::memcpy(&value, this->_fixed_data.data(), sizeof(U));
+            }
+            else if constexpr (std::endian::native == std::endian::big) {
+                std::reverse_copy(
+                    this->_fixed_data.begin(), this->_fixed_data.end(), reinterpret_cast<std::byte*>(&value));
+            }
+            else {
+                // Mixed endianness.
+                for (std::size_t i = 0; i < sizeof(U); ++i) {
+                    value |= std::to_integer<U>(this->_fixed_data[i]) << (i * 8);
+                }
             }
             return value;
         }

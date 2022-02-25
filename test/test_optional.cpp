@@ -55,7 +55,7 @@ namespace serialpp::test {
         auto const deserialiser = deserialise<Optional<std::uint64_t>>(as_const_bytes_view(buffer));
         test_assert(!deserialiser.has_value());
         test_assert_throws<std::bad_optional_access>([&deserialiser] {
-            deserialiser.value();
+            (void)deserialiser.value();
         });
     }
 
