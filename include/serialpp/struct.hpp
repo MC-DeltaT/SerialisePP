@@ -18,6 +18,9 @@ namespace serialpp {
     */
 
 
+   // TODO: struct inheritance?
+
+
     // Specified a field of a serialisable struct.
     template<ConstantString Name, Serialisable T>
     struct Field {
@@ -162,6 +165,7 @@ namespace serialpp {
     struct Serialiser<S> : FieldsSerialiser<typename S::Fields> {};
 
 
+    // TODO: make this destructurable?
     template<Struct S>
     class Deserialiser<S> : public DeserialiserBase<S> {
     public:

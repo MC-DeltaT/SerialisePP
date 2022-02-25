@@ -74,7 +74,7 @@ namespace serialpp::test {
             0xFE, 0xDC      // Optional value
         };
         auto const deserialiser = deserialise<Optional<std::int16_t>>(as_const_bytes_view(buffer));
-        test_assert_throws<VariableOffsetError>([&deserialiser] {
+        test_assert_throws<VariableBufferSizeError>([&deserialiser] {
             (void)deserialiser.value();
         });
     }

@@ -147,11 +147,11 @@ namespace serialpp::test {
         };
         auto const deserialiser = deserialise<List<std::uint16_t>>(as_const_bytes_view(buffer));
         for (std::size_t i = 0; i < 5; ++i) {
-            test_assert_throws<VariableOffsetError>([&deserialiser, i] {
+            test_assert_throws<VariableBufferSizeError>([&deserialiser, i] {
                 (void)deserialiser[i];
             });
         }
-        test_assert_throws<VariableOffsetError>([&deserialiser] {
+        test_assert_throws<VariableBufferSizeError>([&deserialiser] {
             std::ranges::for_each(deserialiser.elements(), [](auto) {});
         });
     }

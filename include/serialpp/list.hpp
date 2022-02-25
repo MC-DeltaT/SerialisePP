@@ -63,6 +63,7 @@ namespace serialpp {
     class SerialiseSource<List<T>> {
     public:
         // TODO: copyable
+        // TODO: check range size upfront
 
         // Constructs with 0 elements.
         SerialiseSource() :
@@ -165,7 +166,7 @@ namespace serialpp {
 
         struct SerialiseVisitor : SerialiseVisitorImpl {
             SerialiseVisitResult operator()(EmptyRange) const noexcept {
-                return {this->target, 0};       // Weirdly, target isn't found by unqualified lookup in MSVC.
+                return {this->target, 0};
             }
 
             SerialiseVisitResult operator()(SmallRangeWrapper const& wrapper) const {
@@ -260,6 +261,8 @@ namespace serialpp {
             };
             return auto_deserialise_scalar(deserialiser);
         }
+        
+        // TODO: at() for bounds checking
 
         // Gets a view of the elements.
         [[nodiscard]]

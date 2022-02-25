@@ -87,6 +87,7 @@ namespace serialpp {
     template<std::unsigned_integral U>
     struct Serialiser<U> {
         SerialiseTarget operator()(SerialiseSource<U> source, SerialiseTarget target) const {
+            // TODO: bit copy if machine endianness is little?
             auto const buffer = target.field_fixed_data();
             assert(buffer.size() >= sizeof(U));
             auto value = source.value;
@@ -106,6 +107,7 @@ namespace serialpp {
         // Deserialises the value.
         [[nodiscard]]
         U value() const {
+            // TODO: bit copy if machine endianness is little?
             assert(this->_fixed_data.size() >= sizeof(U));
             U value = 0;
             for (std::size_t i = 0; i < sizeof(U); ++i) {

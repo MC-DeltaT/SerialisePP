@@ -52,13 +52,24 @@ namespace serialpp {
     class BufferSizeError : public DeserialiseError {
     public:
         using DeserialiseError::DeserialiseError;
+
+        ~BufferSizeError() = 0;
+    };
+
+    inline BufferSizeError::~BufferSizeError() = default;
+
+
+    // Indicates when the fixed data buffer is the wrong size to deserialise the required type.
+    class FixedBufferSizeError : public BufferSizeError {
+    public:
+        using BufferSizeError::BufferSizeError;
     };
 
 
-    // Indicates when an offset to the variable data section is out of range.
-    class VariableOffsetError : public DeserialiseError {
+    // Indicates when the variable data buffer is the wrong size to deserialise the required type.
+    class VariableBufferSizeError : public BufferSizeError {
     public:
-        using DeserialiseError::DeserialiseError;
+        using BufferSizeError::BufferSizeError;
     };
 
 
@@ -95,12 +106,12 @@ namespace serialpp {
         ConstBytesView _fixed_data;
         ConstBytesView _variable_data;
 
-        // Throws VariableOffsetError if offset is not within the bounds of the variable data buffer.
+        // Throws VariableBufferSizeError if offset is not within the bounds of the variable data buffer.
         void _check_variable_offset(std::size_t offset) const {
             if (offset >= _variable_data.size()) {
-                throw VariableOffsetError{
-                    std::format("Variable data offset {} is too large for buffer of size {}",
-                        offset, _variable_data.size())};
+                throw VariableBufferSizeError{
+                    std::format("Variable data buffer of size {} is too small for variable data offset {}",
+                        _variable_data.size(), offset)};
             }
         }
     };
@@ -126,11 +137,10 @@ namespace serialpp {
     // Throws BufferSizeError if buffer is too small to contain an instance of T.
     template<Serialisable T>
     void check_deserialise_buffer_fixed_size(ConstBytesView buffer) {
-        constexpr auto required_size = FIXED_DATA_SIZE<T>;
-        if (buffer.size() < required_size) {
-            throw BufferSizeError{
-                std::format("Buffer of size {} is too small to deserialise type {} of size {}",
-                    buffer.size(), typeid(T).name(), required_size)};
+        if (buffer.size() < FIXED_DATA_SIZE<T>) {
+            throw FixedBufferSizeError{
+                std::format("Fixed data buffer of size {} is too small to deserialise type {} with fixed size {}",
+                    buffer.size(), typeid(T).name(), FIXED_DATA_SIZE<T>)};
         }
     }
 
