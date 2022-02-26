@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <type_traits>
 
 #include "common.hpp"
@@ -14,9 +15,15 @@
 
 namespace serialpp {
 
+    // To be supported, float must be 32-bit IEEE-754, and double must be 64-bit IEEE-754.
+    template<typename T>
+    concept Float = ((std::same_as<T, float> && sizeof(T) == 4) || (std::same_as<T, double> && sizeof(T) == 8))
+        && std::numeric_limits<T>::is_iec559;
+
+
     // Fundamental type. Has no variable data.
     template<typename T>
-    concept Scalar = std::integral<T> || std::same_as<T, std::byte>;
+    concept Scalar = std::same_as<T, std::byte> || std::integral<T> || Float<T>;
 
 
     template<Scalar S>
@@ -110,7 +117,7 @@ namespace serialpp {
                 }
             }
             return target;
-        };
+        }
     };
 
     template<std::unsigned_integral U>
@@ -122,7 +129,7 @@ namespace serialpp {
         [[nodiscard]]
         U value() const {
             assert(this->_fixed_data.size() >= sizeof(U));
-            U value = 0;
+            U value{};
             if constexpr (std::endian::native == std::endian::little) {
                 std::memcpy(&value, this->_fixed_data.data(), sizeof(U));
             }
@@ -203,5 +210,83 @@ namespace serialpp {
             return deserialiser;
         }
     }
+
+
+    /*
+        Floating point numbers:
+            Represented in IEEE-754 binary format and little endianness. float is 32 bytes, double is 64 bytes.
+    */
+
+    template<Float F>
+    struct FixedDataSize<F> : SizeTConstant<sizeof(F)> {};
+
+    template<Float F> requires (std::endian::native == std::endian::little) || (std::endian::native == std::endian::big)
+    struct Serialiser<F> {
+        SerialiseTarget operator()(SerialiseSource<F> source, SerialiseTarget target) const {
+            return _serialise<std::endian::native>(source, target);
+        }
+
+    private:
+        template<std::endian>
+        [[nodiscard]]
+        SerialiseTarget _serialise(SerialiseSource<F> source, SerialiseTarget target) const = delete;
+
+        template<>
+        [[nodiscard]]
+        SerialiseTarget _serialise<std::endian::little>(SerialiseSource<F> source, SerialiseTarget target) const {
+            auto const buffer = target.field_fixed_data();
+            assert(buffer.size() >= sizeof(F));
+            std::memcpy(buffer.data(), &source.value, sizeof(F));
+            return target;
+        }
+
+        template<>
+        [[nodiscard]]
+        SerialiseTarget _serialise<std::endian::big>(SerialiseSource<F> source, SerialiseTarget target) const {
+            auto const buffer = target.field_fixed_data();
+            assert(buffer.size() >= sizeof(F));
+            auto const source_begin = reinterpret_cast<std::byte const*>(&source.value);
+            auto const source_end = source_begin + sizeof(F);
+            std::reverse_copy(source_begin, source_end, buffer.begin());
+            return target;
+        }
+
+        // I don't think there is any easy way to handle mixed endian floats.
+    };
+
+    template<Float F> requires (std::endian::native == std::endian::little) || (std::endian::native == std::endian::big)
+    class Deserialiser<F> : public DeserialiserBase<F> {
+    public:
+        using DeserialiserBase<F>::DeserialiserBase;
+
+        // Deserialises the value.
+        [[nodiscard]]
+        F value() const {
+            return _value<std::endian::native>();
+        }
+    
+    private:
+        template<std::endian>
+        [[nodiscard]]
+        F _value() const = delete;
+
+        template<>
+        [[nodiscard]]
+        F _value<std::endian::little>() const {
+            assert(this->_fixed_data.size() >= sizeof(F));
+            F value{};
+            std::memcpy(&value, this->_fixed_data.data(), sizeof(F));
+            return value;
+        }
+
+        template<>
+        [[nodiscard]]
+        F _value<std::endian::big>() const {
+            assert(this->_fixed_data.size() >= sizeof(F));
+            F value{};
+            std::reverse_copy(this->_fixed_data.begin(), this->_fixed_data.end(), reinterpret_cast<std::byte*>(&value));
+            return value;
+        }
+    };
 
 }

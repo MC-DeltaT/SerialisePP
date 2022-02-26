@@ -22,9 +22,12 @@ namespace serialpp::test {
     static_assert(Scalar<std::int8_t>);
     static_assert(Scalar<std::int32_t>);
     static_assert(Scalar<std::uint64_t>);
+    static_assert(Scalar<float>);
+    static_assert(Scalar<double>);
 
     static_assert(!Scalar<MockSerialisable<1>>);
     static_assert(!Scalar<std::string>);
+    static_assert(!Scalar<long double>);
 
 
     static_assert(FIXED_DATA_SIZE<std::byte> == 1);
@@ -133,6 +136,46 @@ namespace serialpp::test {
         std::array<unsigned char, 1> const buffer{0x01};
         auto const deserialiser = deserialise<bool>(as_const_bytes_view(buffer));
         test_assert(deserialiser.value());
+    }
+
+
+    STEST_CASE(Serialiser_Float) {
+        SerialiseBuffer buffer;
+        auto const target = buffer.initialise<float>();
+        SerialiseSource<float> const source{-100'000'000.0f};
+        Serialiser<float> const serialiser;
+        auto const new_target = serialiser(source, target);
+
+        SerialiseTarget const expected_new_target{buffer, 4, 0, 4, 4};
+        test_assert(new_target == expected_new_target);
+        std::array<unsigned char, 4> const expected_buffer{0x20, 0xBC, 0xBE, 0xCC};
+        test_assert(buffer_equal(buffer, expected_buffer));
+    }
+
+    STEST_CASE(Deserialiser_Float) {
+        std::array<unsigned char, 4> const buffer{0x20, 0xBC, 0xBE, 0xCC};
+        auto const deserialiser = deserialise<float>(as_const_bytes_view(buffer));
+        test_assert(deserialiser.value() == -100'000'000.0f);
+    }
+
+
+    STEST_CASE(Serialiser_Double) {
+        SerialiseBuffer buffer;
+        auto const target = buffer.initialise<double>();
+        SerialiseSource<double> const source{12'345'678'900'000'000.0};
+        Serialiser<double> const serialiser;
+        auto const new_target = serialiser(source, target);
+
+        SerialiseTarget const expected_new_target{buffer, 8, 0, 8, 8};
+        test_assert(new_target == expected_new_target);
+        std::array<unsigned char, 8> const expected_buffer{0x80, 0x3A, 0xAC, 0x2E, 0x2A, 0xEE, 0x45, 0x43};
+        test_assert(buffer_equal(buffer, expected_buffer));
+    }
+
+    STEST_CASE(Deserialiser_Double) {
+        std::array<unsigned char, 8> const buffer{0x80, 0x3A, 0xAC, 0x2E, 0x2A, 0xEE, 0x45, 0x43};
+        auto const deserialiser = deserialise<double>(as_const_bytes_view(buffer));
+        test_assert(deserialiser.value() == 12'345'678'900'000'000.0);
     }
 
 

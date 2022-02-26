@@ -89,7 +89,7 @@ namespace serialpp {
 
     // Converts a bytes representation back to a value.
     template<typename T>
-    struct Deserialiser;
+    class Deserialiser;
 
 
     // Helper for implementing Deserialiser.

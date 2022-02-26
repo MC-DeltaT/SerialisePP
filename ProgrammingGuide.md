@@ -83,6 +83,7 @@ Scalars in Serialise++ are the basic C++ types. These currently include:
  - Signed integers
  - `bool`
  - `std::byte`
+ - `float` and `double` (supported only if they are IEEE-754 binary32 and binary64, respectively, and aren't mixed endian)
 
 `SerialiseSource` for a scalar is a transparent wrapper around the scalar itself, stored in the data member `value`.
 It's constructible from a scalar value and implicitly convertible to the scalar value.
@@ -178,7 +179,7 @@ struct Date : SerialisableStruct<
 
 struct StockRecord : SerialisableStruct<
     Field<"date", Date>,
-    Field<"price", std::int32_t>,
+    Field<"price", float>,
     Field<"is_open", bool>
 > {};
 
@@ -192,12 +193,12 @@ SerialiseSource<StockHistory> const source{
     {{                      // records
         {                   // records[0]
             {2020, 2, 25},  // date
-            22517,          // price
+            22517.10f,      // price
             true            // is_open
         },
         {                   // records[1]
             {2020, 2, 26},  // date
-            22504,          // price
+            22504.50f,      // price
             false           // is_open
         }
     }}
@@ -210,7 +211,7 @@ std::uint64_t const instrument_id = stock_history.get<"instrument_id">();
 Deserialiser<List<StockRecord>> const records = stock_history.get<"records">();
 for (Deserialiser<StockRecord> const record : records.elements()) {
     Deserialiser<Date> const date = record.get<"date">();
-    std::int32_t const price = record.get<"price">();
+    float const price = record.get<"price">();
     bool const is_open = record.get<"is_open">();
     // Do something with the record data...
 }

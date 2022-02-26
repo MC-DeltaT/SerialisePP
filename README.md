@@ -12,6 +12,7 @@ But unlike Cap'n Proto, Serialise++ enables definition of serialisable types in 
 
  - Supported types:
    - Integers
+   - Floating point numbers
    - Booleans
    - Lists (dynamic arrays)
    - Optional
@@ -20,7 +21,7 @@ But unlike Cap'n Proto, Serialise++ enables definition of serialisable types in 
  - On-the-fly serialisation and deserialisation - no data duplication!
  - Fully contained within C++ (no separate message/type definition, no code generation)
 
-(Support for more types is likely to come in the future, e.g. floating-point numbers, strings, static arrays).
+(Support for more types is likely to come in the future, e.g. strings, static arrays).
 
 ## Limitations
 
@@ -36,6 +37,7 @@ In situations where serialised size and serialisation latency are required to be
  - C++20
  - CMake 3.22 or newer (unless you want to build manually)
  - Platform with 8-bit bytes
+ - Platform with IEEE-754 floats and nonmixed endianness (for floating point number support)
 
 ## Dependencies
 

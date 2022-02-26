@@ -57,7 +57,7 @@ Variable data: none.
 
 ### Integers
 
-\[Includes the standard C++ integral types, including `char`s, except `bool`.\]
+Includes the standard C++ integral types, including `char`s, except `bool`.
 
 Fixed data: the integer is represented in two's complement, with little-endian byte order. The number of bytes of an integer type `I` is exactly `sizeof(I)` (since C++20 requires two's complement).
 
@@ -66,7 +66,7 @@ Variable data: none.
 Note that the values of character literals encoded in `char` types will depend on the character set used by the compiler (which I believe is implementation-defined until C++23).
 
 Example:  
-`std::int32_t` with value -1'234'567.  
+`std::int32_t` with the value -1'234'567.  
 <pre>
 offset: value
 0x00  : 0x79    # least significant byte
@@ -80,6 +80,24 @@ offset: value
 Fixed data: 1 byte. Serialise++ serialises `true` to `0x01` and `false` to `0x00` specifically, but when deserialising, any nonzero value is accepted as `true`.
 
 Variable data: none.
+
+### Floating point numbers
+
+Includes `float` and `double`.
+
+Fixed data: the value is represented in IEEE-754 binary format, with little endianness. `float` (IEEE-754 binary32) is 4 bytes, `double` (IEEE-754 binary64) is 8 bytes.
+
+Variable data: none.
+
+Example:  
+`float` with the value 123456.
+<pre>
+offset: value
+0x00  : 0x00
+0x01  : 0x20
+0x02  : 0xF1
+0x03  : 0x47
+</pre>
 
 ### `Optional<T>`
 
