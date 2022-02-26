@@ -27,7 +27,8 @@ namespace serialpp {
 
 
     template<Scalar S>
-    struct SerialiseSource<S> {
+    class SerialiseSource<S> {
+    public:
         S value;
 
         constexpr SerialiseSource() noexcept :
@@ -264,7 +265,7 @@ namespace serialpp {
         F value() const {
             return _value<std::endian::native>();
         }
-    
+
     private:
         template<std::endian>
         [[nodiscard]]

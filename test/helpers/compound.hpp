@@ -2,6 +2,7 @@
 
 #include <cstdint>
 
+#include <serialpp/array.hpp>
 #include <serialpp/common.hpp>
 #include <serialpp/list.hpp>
 #include <serialpp/optional.hpp>
@@ -20,7 +21,8 @@ namespace serialpp::test {
     struct CompoundTestStruct2 : SerialisableStruct<
         Field<"struct1", CompoundTestStruct1>,
         Field<"opt_struct1", Optional<CompoundTestStruct1>>,
-        Field<"list_struct1", List<CompoundTestStruct1>>
+        Field<"list_struct1", List<CompoundTestStruct1>>,
+        Field<"array_struct1", Array<CompoundTestStruct1, 2>>
     > {};
 
     struct CompoundTestStruct3 : SerialisableStruct<

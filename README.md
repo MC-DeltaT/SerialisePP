@@ -14,14 +14,15 @@ But unlike Cap'n Proto, Serialise++ enables definition of serialisable types in 
    - Integers
    - Floating point numbers
    - Booleans
-   - Lists (dynamic arrays)
+   - Static arrays
+   - Dynamic arrays
    - Optional
    - User-defined structs
  - Extensible serialisation for custom types
  - On-the-fly serialisation and deserialisation - no data duplication!
  - Fully contained within C++ (no separate message/type definition, no code generation)
 
-(Support for more types is likely to come in the future, e.g. strings, static arrays).
+(Support for more types is likely to come in the future, e.g. strings, pairs).
 
 ## Limitations
 

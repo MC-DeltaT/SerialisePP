@@ -105,7 +105,7 @@ namespace serialpp::test {
     }
 
 
-    static_assert(FIXED_DATA_SIZE<CompoundTestStruct3> == 20);
+    static_assert(FIXED_DATA_SIZE<CompoundTestStruct3> == 34);
 
     STEST_CASE(Serialiser_CompoundStruct) {
         SerialiseBuffer buffer;
@@ -133,6 +133,18 @@ namespace serialpp::test {
                         20,
                         -34'562'034'598'108'927ll
                     }
+                }},
+                {{
+                    {
+                        {{20}},
+                        1,
+                        {-857923}
+                    },
+                    {
+                        {},
+                        16,
+                        {}
+                    }
                 }}
             },
             {
@@ -144,9 +156,9 @@ namespace serialpp::test {
         Serialiser<CompoundTestStruct3> const serialiser;
         auto const new_target = serialiser(source, target);
 
-        SerialiseTarget const expected_new_target{buffer, 20, 20, 0, 81};
+        SerialiseTarget const expected_new_target{buffer, 34, 34, 0, 105};
         test_assert(new_target == expected_new_target);
-        std::array<unsigned char, 81> const expected_buffer{
+        std::array<unsigned char, 105> const expected_buffer{
             // Fixed data
             0x03, 0x00,     // struct2.struct1.list_u16 size
             0x00, 0x00,     // struct2.struct1.list_u16 offset
@@ -155,10 +167,18 @@ namespace serialpp::test {
             0x07, 0x00,     // struct2.opt_struct1 value offset
             0x02, 0x00,     // struct2.list_struct1 size
             0x13, 0x00,     // struct2.list_struct1 offset
+            0x01, 0x00,     // struct2.array_struct1[0].list_u16 size
+            0x2B, 0x00,     // struct2.array_struct1[0].list_u16 offset
+            0x01,           // struct2.array_struct1[0].u8
+            0x2E, 0x00,     // struct2.array_struct1[0].opt_i64 offset
+            0x00, 0x00,     // struct2.array_struct1[1].list_u16 size
+            0x35, 0x00,     // struct2.array_struct1[1].list_u16 offset
+            0x10,           // struct2.array_struct1[1].u8
+            0x00, 0x00,     // struct2.array_struct1[1].opt_i64 offset
             0x05, 0x00,     // struct1.list_u16 size
-            0x2B, 0x00,     // struct1.list_u16 offset
+            0x35, 0x00,     // struct1.list_u16 offset
             0x2C,           // struct1.u8
-            0x36, 0x00,     // struct1.opt_i64 value offset
+            0x40, 0x00,     // struct1.opt_i64 value offset
             // Variable data
             0xAF, 0xBE,     // struct2.struct1.list_u16 elements
             0x57, 0x70,
@@ -180,6 +200,8 @@ namespace serialpp::test {
             0x24, 0x00,     // struct2.list_struct1[1].opt_i64 value offset
             0x38, 0x4D,     // struct2.list_struct1[0].list_u16 elements
             0x01, 0xA1, 0x10, 0x3D, 0x03, 0x36, 0x85, 0xFF, // struct2.list_struct1[1].opt_i64 value
+            0x14, 0x00,     // struct2.array_struct1[0].list_u16 elements
+            0xBD, 0xE8, 0xF2, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, // struct2.array_struct1[0].opt_i64 value
             0x4A, 0x28,     // struct1.list_u16 elements
             0x93, 0x14,
             0x1F, 0xDC,
@@ -191,7 +213,7 @@ namespace serialpp::test {
     }
 
     STEST_CASE(Deserialiser_CompoundStruct) {
-        std::array<unsigned char, 81> const buffer{
+        std::array<unsigned char, 105> const buffer{
             // Fixed data
             0x03, 0x00,     // struct2.struct1.list_u16 size
             0x00, 0x00,     // struct2.struct1.list_u16 offset
@@ -200,10 +222,18 @@ namespace serialpp::test {
             0x07, 0x00,     // struct2.opt_struct1 value offset
             0x02, 0x00,     // struct2.list_struct1 size
             0x13, 0x00,     // struct2.list_struct1 offset
+            0x01, 0x00,     // struct2.array_struct1[0].list_u16 size
+            0x2B, 0x00,     // struct2.array_struct1[0].list_u16 offset
+            0x01,           // struct2.array_struct1[0].u8
+            0x2E, 0x00,     // struct2.array_struct1[0].opt_i64 offset
+            0x00, 0x00,     // struct2.array_struct1[1].list_u16 size
+            0x35, 0x00,     // struct2.array_struct1[1].list_u16 offset
+            0x10,           // struct2.array_struct1[1].u8
+            0x00, 0x00,     // struct2.array_struct1[1].opt_i64 offset
             0x05, 0x00,     // struct1.list_u16 size
-            0x2B, 0x00,     // struct1.list_u16 offset
+            0x35, 0x00,     // struct1.list_u16 offset
             0x2C,           // struct1.u8
-            0x36, 0x00,     // struct1.opt_i64 value offset
+            0x40, 0x00,     // struct1.opt_i64 value offset
             // Variable data
             0xAF, 0xBE,     // struct2.struct1.list_u16 elements
             0x57, 0x70,
@@ -225,6 +255,8 @@ namespace serialpp::test {
             0x24, 0x00,     // struct2.list_struct1[1].opt_i64 value offset
             0x38, 0x4D,     // struct2.list_struct1[0].list_u16 elements
             0x01, 0xA1, 0x10, 0x3D, 0x03, 0x36, 0x85, 0xFF, // struct2.list_struct1[1].opt_i64 value
+            0x14, 0x00,     // struct2.array_struct1[0].list_u16 elements
+            0xBD, 0xE8, 0xF2, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, // struct2.array_struct1[0].opt_i64 value
             0x4A, 0x28,     // struct1.list_u16 elements
             0x93, 0x14,
             0x1F, 0xDC,
@@ -251,13 +283,22 @@ namespace serialpp::test {
 
         auto const struct2_list_struct1 = struct2.get<"list_struct1">();
         test_assert(struct2_list_struct1.size() == 2);
-        test_assert(std::ranges::equal(struct2_list_struct1[0].get<"list_u16">().elements(), std::array{19768}));
-        test_assert(struct2_list_struct1[0].get<"u8">() == 61);
-        test_assert(!struct2_list_struct1[0].get<"opt_i64">().has_value());
-        test_assert(struct2_list_struct1[1].get<"list_u16">().empty());
-        test_assert(struct2_list_struct1[1].get<"u8">() == 20);
-        test_assert(struct2_list_struct1[1].get<"opt_i64">().has_value());
-        test_assert(struct2_list_struct1[1].get<"opt_i64">().value() == -34'562'034'598'108'927ll);
+        test_assert(std::ranges::equal(struct2_list_struct1.at(0).get<"list_u16">().elements(), std::array{19768}));
+        test_assert(struct2_list_struct1.at(0).get<"u8">() == 61);
+        test_assert(!struct2_list_struct1.at(0).get<"opt_i64">().has_value());
+        test_assert(struct2_list_struct1.at(1).get<"list_u16">().empty());
+        test_assert(struct2_list_struct1.at(1).get<"u8">() == 20);
+        test_assert(struct2_list_struct1.at(1).get<"opt_i64">().has_value());
+        test_assert(struct2_list_struct1.at(1).get<"opt_i64">().value() == -34'562'034'598'108'927ll);
+
+        auto const struct2_array_struct1 = struct2.get<"array_struct1">();
+        test_assert(std::ranges::equal(struct2_array_struct1.at(0).get<"list_u16">().elements(), std::array{20}));
+        test_assert(struct2_array_struct1.at(0).get<"u8">() == 1);
+        test_assert(struct2_array_struct1.at(0).get<"opt_i64">().has_value());
+        test_assert(struct2_array_struct1.at(0).get<"opt_i64">().value() == -857923);
+        test_assert(struct2_array_struct1.at(1).get<"list_u16">().empty());
+        test_assert(struct2_array_struct1.at(1).get<"u8">() == 16);
+        test_assert(!struct2_array_struct1.at(1).get<"opt_i64">().has_value());
 
         auto const struct1 = deserialiser.get<"struct1">();
         test_assert(

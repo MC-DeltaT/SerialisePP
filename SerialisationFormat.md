@@ -99,6 +99,26 @@ offset: value
 0x03  : 0x47
 </pre>
 
+### `Array<T, N>`
+
+Fixed data: just the fixed data for all the elements, in the same order as in the `SerialiseSource`.
+
+Variable data: just the variable data for the elements, in the same order as in the `SerialiseSource`.
+
+Example:  
+`Array<std::uint16_t, 4>` containing the elements `{12, 45, 465, 24643}`.
+<pre>
+offset: value
+0x00  : 0x0C    # element 0
+0x01  : 0x00
+0x02  : 0x2D    # element 1
+0x03  : 0x00
+0x04  : 0xD1    # element 2
+0x05  : 0x01
+0x06  : 0x43    # element 3
+0x07  : 0x60
+</pre>
+
 ### `Optional<T>`
 
 Fixed data: a `std::uint16_t` specifying the "value offset" (see below). 0 indicates no value is contained.
@@ -189,9 +209,9 @@ offset: value
 
 ### `SerialisableStruct<Fs...>`
 
-Fixed data: just the fixed data for all fields `Fs...` (in the same order as in the template argument list).
+Fixed data: just the fixed data for all fields `Fs...`, in the same order as in the template argument list.
 
-Variable data: just the variable data for all fields `Fs...` (in the same order as in the template argument list).
+Variable data: just the variable data for all fields `Fs...`, in the same order as in the template argument list.
 
 Example:  
 ```c++

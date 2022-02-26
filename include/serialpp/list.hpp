@@ -269,7 +269,7 @@ namespace serialpp {
             };
             return auto_deserialise_scalar(deserialiser);
         }
-        
+
         // Gets the element at the specified index. Throws std::out_of_range if index is out of bounds.
         [[nodiscard]]
         auto at(std::size_t index) const {
@@ -278,8 +278,7 @@ namespace serialpp {
                 return (*this)[index];
             }
             else {
-                throw std::out_of_range{
-                    std::format("List index {} is out of bounds for size {}", index, size)};
+                throw std::out_of_range{std::format("List index {} is out of bounds for size {}", index, size)};
             }
         }
 

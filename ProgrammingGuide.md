@@ -93,20 +93,27 @@ It's constructible from a scalar value and implicitly convertible to the scalar 
 Because scalars the bread-and-butter types, they support "automatic deserialisation" in many contexts within Serialise++.
 If a nonscalar type `C` contains a scalar type `S`, then `Deserialiser<C>` won't give you a `Deserialiser<S>`, it will just give you the instance of `S` already deserialised.
 
-### Optional
+### Array
 
-`Optional<T>` is a type which may contain 0 or 1 instances of `T`.
+`Array<T, N>` is a type which contains an ordered sequence of exactly `N` elements of type `T`.
 
-`SerialiseSource` for an `Optional<T>` is simply an `std::optional` for a `SerialiseSource<T>`.
+`SerialiseSource` for an `Array<T, N>` contains a data member `elements` of type `SerialiseSource<T>[N]` if `N > 0`, or nothing if `N == 0`.
+It can be initialised like an `std::array`:
+```c++
+SerialiseSource<Array<long, 4>> const source{{1, 2, 3, 4}};
+```
 
-`Deserialiser` for an `Optional<T>` has the following member functions:
- - `has_value()`: returns `true` if an instance of `T` is contained, otherwise it returns `false`.
- - `operator*`: returns a `Deserialiser<T>` (or `T` for scalar `T`). May only be called if `has_value() == true`.
- - `value()`: like `operator*`, but throws `std::bad_optional_access` if `has_value() == false`.
+`Deserialiser` for an `Array<T, N>` has the following member functions:
+
+ - `size()`: returns the number of elements (always `N`).
+ - `operator[]`: returns a `Deserialiser<T>` (or `T` for scalar `T`) for an element at the specified index. The index must be in the range `[0, N)`.
+ - `at()`: like `operator[]` but throws `std::out_of_range` if the index is out of bounds.
+ - `get<I>()`: like `operator[]`, but checks the index at compile time.
+ - `elements()`: returns a view of that yields `Deserialiser<T>` (or `T` for scalar `T`) for each element.
 
 ### List
 
-`List<T>` is a type which contains an ordered sequence of `T`.
+`List<T>` is a type which contains a variable-size ordered sequence of `T`.
 
 `SerialiseSource` for a `List<T>` wraps a C++20 range whose elements are convertible to `SerialiseSource<T>`.
 It may be constructed as follows:
@@ -138,6 +145,17 @@ SerialiseSource<List<long>> const source{v};
  - `operator[]`: returns a `Deserialiser<T>` (or `T` for scalar `T`) for an element at the specified index. The index must be in the range `[0, size())`.
  - `at()`: like `operator[]` but throws `std::out_of_range` if the index is out of bounds.
  - `elements()`: returns a view of that yields `Deserialiser<T>` (or `T` for scalar `T`) for each element.
+
+### Optional
+
+`Optional<T>` is a type which may contain 0 or 1 instances of `T`.
+
+`SerialiseSource` for an `Optional<T>` is simply an `std::optional` for a `SerialiseSource<T>`.
+
+`Deserialiser` for an `Optional<T>` has the following member functions:
+ - `has_value()`: returns `true` if an instance of `T` is contained, otherwise it returns `false`.
+ - `operator*`: returns a `Deserialiser<T>` (or `T` for scalar `T`). May only be called if `has_value() == true`.
+ - `value()`: like `operator*`, but throws `std::bad_optional_access` if `has_value() == false`.
 
 ### Structs
 

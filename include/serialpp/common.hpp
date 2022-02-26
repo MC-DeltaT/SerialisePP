@@ -119,7 +119,7 @@ namespace serialpp {
 
     // Container/generator for a value to be serialised.
     template<typename T>
-    struct SerialiseSource;
+    class SerialiseSource;
 
 
     class SerialiseTarget;

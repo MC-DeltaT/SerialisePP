@@ -8,6 +8,7 @@ add_library(SerialisePP INTERFACE)
 target_include_directories(SerialisePP INTERFACE include/)
 
 add_executable(SerialisePPTest
+    test/test_array.cpp
     test/test_common.cpp
     test/test_compound.cpp
     test/test_list.cpp

@@ -136,7 +136,8 @@ namespace serialpp {
 
 
     template<Struct S>
-    struct SerialiseSource<S> : FieldsSerialiseSource<typename S::Fields> {
+    class SerialiseSource<S> : public FieldsSerialiseSource<typename S::Fields> {
+    public:
         using FieldsSerialiseSource<typename S::Fields>::FieldsSerialiseSource;
     };
 

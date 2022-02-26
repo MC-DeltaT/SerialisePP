@@ -44,7 +44,8 @@ namespace serialpp {
     struct FixedDataSize<test::MockSerialisable<FixedSize>> : SizeTConstant<FixedSize> {};
 
     template<std::size_t FixedSize>
-    struct SerialiseSource<test::MockSerialisable<FixedSize>> {
+    class SerialiseSource<test::MockSerialisable<FixedSize>> {
+    public:
         int tag = 0;
 
         [[nodiscard]]

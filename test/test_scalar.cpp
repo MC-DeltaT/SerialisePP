@@ -139,6 +139,8 @@ namespace serialpp::test {
     }
 
 
+    static_assert(FIXED_DATA_SIZE<float> == 4);
+
     STEST_CASE(Serialiser_Float) {
         SerialiseBuffer buffer;
         auto const target = buffer.initialise<float>();
@@ -158,6 +160,8 @@ namespace serialpp::test {
         test_assert(deserialiser.value() == -100'000'000.0f);
     }
 
+
+    static_assert(FIXED_DATA_SIZE<double> == 8);
 
     STEST_CASE(Serialiser_Double) {
         SerialiseBuffer buffer;
