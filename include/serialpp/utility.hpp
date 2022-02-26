@@ -118,7 +118,7 @@ namespace serialpp {
         constexpr NamedTuple() = default;
 
         constexpr NamedTuple(typename Es::Type... elements) :
-            impl::DeferredBase<Es>{std::move(elements)}...
+            impl::DeferredBase<Es>{std::forward<typename Es::Type>(elements)}...
         {}
 
         // Gets an element by name.
@@ -159,13 +159,11 @@ namespace serialpp {
         }
 
         SmallAny(SmallAny&& other) noexcept :
-            _visitor_func{other._visitor_func}
+            _visitor_func{std::exchange(other._visitor_func, nullptr)}
         {
             // No need to move data if other was empty.
             if (_visitor_func) {
                 std::memcpy(_data, other._data, sizeof(_data));
-                other._destruct();
-                other._visitor_func = nullptr;
             }
         }
 
@@ -185,7 +183,7 @@ namespace serialpp {
         }
 
     private:
-        alignas(Align) char _data[MaxSize];
+        alignas(Align) std::byte _data[MaxSize];
         void (*_visitor_func)(void const*, bool, bool, Visitor*);
 
         void _destruct() noexcept {

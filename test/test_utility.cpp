@@ -1,9 +1,11 @@
 #include <algorithm>
 #include <cstdint>
+#include <initializer_list>
 #include <string>
 #include <string_view>
 #include <typeinfo>
 #include <utility>
+#include <vector>
 
 #include <serialpp/utility.hpp>
 
@@ -117,7 +119,7 @@ namespace serialpp::test {
         test_assert(destructions == 1);
     }
 
-    STEST_CASE(SmallAny_MoveConstruct) {
+    STEST_CASE(SmallAny_MoveConstruct1) {
         std::size_t constructions = 0;
         std::size_t destructions = 0;
         {
@@ -125,18 +127,29 @@ namespace serialpp::test {
                 any1{std::in_place_type<LifecycleObserver>, constructions, destructions, 13};
             test_assert(constructions == 1);
             test_assert(destructions == 0);
-            decltype(any1) const any2{std::move(any1)};
+            decltype(any1) any2{std::move(any1)};
             test_assert(constructions == 1);
-            test_assert(destructions == 1);
+            test_assert(destructions == 0);
+            decltype(any2) const any3{std::move(any2)};
+            test_assert(constructions == 1);
+            test_assert(destructions == 0);
 
             MockSmallAnyVisitor<LifecycleObserver> visitor;
-            any2.visit(visitor);
+            any3.visit(visitor);
             test_assert(visitor.value);
             test_assert(visitor.value->tag.has_value());
             test_assert(visitor.value->tag.value() == 13);
         }
         test_assert(constructions == 1);
-        test_assert(destructions == 2);
+        test_assert(destructions == 1);
+    }
+
+    STEST_CASE(SmallAny_MoveConstruct2) {
+        // Check move for a contained type which manages resources (i.e. will crash if move is broken).
+        SmallAny<sizeof(std::vector<long>), alignof(std::vector<long>), MockSmallAnyVisitor<std::vector<long>>>
+            any1{std::in_place_type<std::vector<long>>, std::initializer_list<long>{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}};
+        decltype(any1) any2{std::move(any1)};
+        decltype(any2) any3{std::move(any2)};
     }
 
     STEST_CASE(SmallAny_VisitNonConst) {

@@ -188,6 +188,7 @@ namespace serialpp {
             }
         };
 
+        // TODO: can we integrate the small range wrapper into the outer variant to avoid extra bookkeeping?
         // The most common range types are small, so we can often avoid allocating on the heap.
         std::variant<
             EmptyRange,
