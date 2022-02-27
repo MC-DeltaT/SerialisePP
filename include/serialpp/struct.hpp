@@ -178,8 +178,9 @@ namespace serialpp {
         auto get() const {
             constexpr auto offset = FIELD_OFFSET<S, Name>;
             assert(offset <= this->_fixed_data.size());
-            auto deserialiser = Deserialiser<FieldType<S, Name>>{
-                this->_fixed_data.subspan(offset),
+            using FieldT = FieldType<S, Name>;
+            auto deserialiser = Deserialiser<FieldT>{
+                this->_fixed_data.subspan(offset, FIXED_DATA_SIZE<FieldT>),
                 this->_variable_data
             };
             return auto_deserialise_scalar(deserialiser);

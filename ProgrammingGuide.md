@@ -119,7 +119,7 @@ SerialiseSource<Array<long, 4>> const source{{1, 2, 3, 4}};
 It may be constructed as follows:
 
 ```c++
-// Default construct to contain 0 elements:
+// Default construct to contain no elements:
 SerialiseSource<List<long>> const source;
 
 // Construct from a braced initialiser of SerialiseSource<T>:
@@ -141,21 +141,37 @@ SerialiseSource<List<long>> const source{v};
 `Deserialiser` for a `List<T>` has the following member functions:
 
  - `size()`: returns the number of elements.
- - `empty()`: returns `true` if there are 0 elements, `false` otherwise.
+ - `empty()`: returns `true` if there are zero elements, `false` otherwise.
  - `operator[]`: returns a `Deserialiser<T>` (or `T` for scalar `T`) for an element at the specified index. The index must be in the range `[0, size())`.
  - `at()`: like `operator[]` but throws `std::out_of_range` if the index is out of bounds.
  - `elements()`: returns a view of that yields `Deserialiser<T>` (or `T` for scalar `T`) for each element.
 
 ### Optional
 
-`Optional<T>` is a type which may contain 0 or 1 instances of `T`.
+`Optional<T>` is a type which may contain zero or one instances of `T`.
 
 `SerialiseSource` for an `Optional<T>` is simply an `std::optional` for a `SerialiseSource<T>`.
 
 `Deserialiser` for an `Optional<T>` has the following member functions:
+
  - `has_value()`: returns `true` if an instance of `T` is contained, otherwise it returns `false`.
  - `operator*`: returns a `Deserialiser<T>` (or `T` for scalar `T`). May only be called if `has_value() == true`.
  - `value()`: like `operator*`, but throws `std::bad_optional_access` if `has_value() == false`.
+
+### Pair
+
+`Pair<T1, T2>` is a type which contains an instance of `T1` and an instance of `T2`.
+
+`SerialiseSource` for a `Pair<T1, T2>` is simply an `std::pair` of `SerialiseSource<T1>` and `SerialiseSource<T2>`.
+
+`Deserialiser` for a `Pair<T1, T2>` has the following member functions:
+
+ - `first()`: returns a `Deserialiser<T1>` (or `T1` for scalar `T1`).
+ - `second()`: returns a `Deserialiser<T2>` (or `T2` for scalar `T2`).
+ - `get<I>()`: returns `first()` for `I == 0`, and `second()` for `I == 1`.
+
+The deserialiser is also destructurable into its two elements using structured bindings.
+The first binding is to the result of `first()`, and the second binding is to the result of `second()`.
 
 ### Structs
 
@@ -163,7 +179,7 @@ Serialise++ supports user-defined structs via the `SerialisableStruct<Fields...>
 By inheriting from or aliasing `SerialisableStruct`, an automatically serialisable struct is declared via template metaprogramming.
 
 Fields of a `SerialisableStruct` are specified with the `Field<Name, T>` class template.
-`Field`'s `Name` template argument is a string literal specifying the name of the field (which must be unique within 1 `SerialisableStruct`). `Field`'s `T` template argument is the type of the field data.
+`Field`'s `Name` template argument is a string literal specifying the name of the field (which must be unique within the same `SerialisableStruct`). `Field`'s `T` template argument is the type of the field data.
 
 For example:
 

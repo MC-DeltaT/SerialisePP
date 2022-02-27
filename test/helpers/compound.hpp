@@ -6,6 +6,7 @@
 #include <serialpp/common.hpp>
 #include <serialpp/list.hpp>
 #include <serialpp/optional.hpp>
+#include <serialpp/pair.hpp>
 #include <serialpp/scalar.hpp>
 #include <serialpp/struct.hpp>
 
@@ -26,8 +27,7 @@ namespace serialpp::test {
     > {};
 
     struct CompoundTestStruct3 : SerialisableStruct<
-        Field<"struct2", CompoundTestStruct2>,
-        Field<"struct1", CompoundTestStruct1>
+        Field<"pair_struct2_struct1", Pair<CompoundTestStruct2, CompoundTestStruct1>>
     > {};
 
 }

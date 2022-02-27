@@ -50,6 +50,7 @@ namespace serialpp {
     };
 
 
+    // TODO: make this destructurable?
     template<Serialisable T, std::size_t N>
     class Deserialiser<Array<T, N>> : public DeserialiserBase<Array<T, N>> {
     public:
@@ -65,7 +66,7 @@ namespace serialpp {
         auto operator[](std::size_t index) const {
             assert(index < N);
             Deserialiser<T> const deserialiser{
-                this->_fixed_data.subspan(FIXED_DATA_SIZE<T> * index),
+                this->_fixed_data.subspan(FIXED_DATA_SIZE<T> * index, FIXED_DATA_SIZE<T>),
                 this->_variable_data
             };
             return auto_deserialise_scalar(deserialiser);

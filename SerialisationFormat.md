@@ -99,26 +99,6 @@ offset: value
 0x03  : 0x47
 </pre>
 
-### `Array<T, N>`
-
-Fixed data: just the fixed data for all the elements, in the same order as in the `SerialiseSource`.
-
-Variable data: just the variable data for the elements, in the same order as in the `SerialiseSource`.
-
-Example:  
-`Array<std::uint16_t, 4>` containing the elements `{12, 45, 465, 24643}`.
-<pre>
-offset: value
-0x00  : 0x0C    # element 0
-0x01  : 0x00
-0x02  : 0x2D    # element 1
-0x03  : 0x00
-0x04  : 0xD1    # element 2
-0x05  : 0x01
-0x06  : 0x43    # element 3
-0x07  : 0x60
-</pre>
-
 ### `Optional<T>`
 
 Fixed data: a `std::uint16_t` specifying the "value offset" (see below). 0 indicates no value is contained.
@@ -205,6 +185,56 @@ offset: value
 0x72  : 0x01    # element 0 value
 0x73  : 0x03    # element 2 value
 0x74  : 0x04    # element 3 value
+</pre>
+
+### `Array<T, N>`
+
+Fixed data: just the fixed data for all the elements, in the same order as in the `SerialiseSource`.
+
+Variable data: just the variable data for the elements, in the same order as in the `SerialiseSource`.
+
+Example:  
+`Array<Optional<std::uint16_t>, 4>` containing the elements `{12, null, 465, 24643}`.  
+Assume the variable data section already has 200 bytes of other data.
+<pre>
+offset: value
+0x00  : 0xC9    # element 0 value offset
+0x01  : 0x00
+0x02  : 0x00    # element 1 value offset
+0x03  : 0x00
+0x04  : 0xCB    # element 2 value offset
+0x05  : 0x00
+0x06  : 0xCD    # element 3 value offset
+0x07  : 0x00
+...             # other variable data
+0xD0  : 0x0C    # element 0 value
+0xD1  : 0x00
+0xD2  : 0xD1    # element 2 value
+0xD3  : 0x01
+0xD4  : 0x43    # element 3 value
+0xD5  : 0x60
+</pre>
+
+### `Pair<T1, T2>`
+
+Fixed data: just the fixed data for `T1`, then `T2`.
+
+Variable data: just the variable data for `T1`, then `T2`.
+
+Example:  
+`Pair<Optional<std::uint32_t>, std::int16_t>` containing the values 1234567 and -12345.  
+Assume the variable data section already has 30 bytes of other data.
+<pre>
+offset: value
+0x00  : 0x1F    # optional value offset
+0x01  : 0x00
+0x02  : 0xC7    # int16_t
+0x03  : 0xCF
+...             # other variable data
+0x22  : 0x87    # optional value
+0x23  : 0xD6
+0x24  : 0x12
+0x25  : 0x00
 </pre>
 
 ### `SerialisableStruct<Fs...>`
