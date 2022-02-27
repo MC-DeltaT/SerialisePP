@@ -6,7 +6,7 @@ by Reece Jones
 
 Serialise++ is an easy-to-use library for efficient, generic serialisation of C++ values into bytes.
 It uses a serialisation format inspired by [Cap'n Proto](https://capnproto.org/), to enable serialisation/deserialisation without copying large amount of data between C++ values and bytes buffers.
-But unlike Cap'n Proto, Serialise++ enables definition of serialisable types in C++, with no extra code generation required!
+But unlike Cap'n Proto and similar libraries, Serialise++ enables definition of serialisable types in C++, with no extra code generation required!
 
 ## Features
 
@@ -27,12 +27,12 @@ But unlike Cap'n Proto, Serialise++ enables definition of serialisable types in 
 
 ## Limitations
 
-Serialise++ is designed for fairly small messages. Currently there is a hard limit of ~2<sup>16</sup> bytes of variable-sized data.
-As such, Lists can store at most 2<sup>16</sup> elements.  
+To achieve efficient serialisation/deserialisation while maintaining a simple serialisation format, Serialise++ is designed for fairly small messages.
+Currently there is a hard limit of ~2<sup>16</sup> bytes of variable-sized data.
+This limit may be expanded if a sufficient need for larger messages is found.
 
-That said, Serialise++ is not designed for situations where literally every bit of serialised data counts. There is currently no built-in support for bit-packing or variable length integers.
-
-In situations where serialised size and serialisation latency are required to be ultra-optimised, Serialise++ probably isn't appropriate. Some performance must be forgone in exchange for generality, flexibility, and usability.
+That said, Serialise++ is not designed for situations where literally every bit of serialised data or every CPU cycle spent serialising/deserialising is critical.
+Some efficiency and performance must be forgone in exchange for generality, flexibility, and usability.
 
 ## Requirements
 
