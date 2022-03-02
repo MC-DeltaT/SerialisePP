@@ -5,6 +5,7 @@
 #include <concepts>
 #include <cstddef>
 #include <cstring>
+#include <new>
 #include <string_view>
 #include <type_traits>
 #include <utility>
@@ -146,12 +147,26 @@ namespace serialpp {
         static constexpr std::size_t MAX_SIZE = MaxSize;
         static constexpr std::size_t ALIGN = Align;
 
-        template<typename T, typename... Args>
-            requires (sizeof(T) <= MaxSize) && (alignof(T) <= Align) && std::constructible_from<T, Args...>
+        // Checks if this type can contain a particular type (i.e. satisfies size and alignment requirements).
+        template<typename T>
+        static constexpr bool can_contain() noexcept {
+            return sizeof(T) <= MaxSize && alignof(T) <= Align;
+        }
+
+        template<typename T, typename... Args> requires (can_contain<T>()) && std::constructible_from<T, Args...>
         SmallAny(std::in_place_type_t<T>, Args&&... args) :
             _visitor_func{&_generic_visitor_func<T>}
         {
             new(_data) T(std::forward<Args>(args)...);
+        }
+
+        // Construct using a provided function that does custom construction of the contained object.
+        template<std::invocable<void*> F, typename T = std::remove_pointer_t<std::invoke_result_t<F, void*>>>
+            requires (can_contain<T>())
+        SmallAny(F&& constructor) :
+            _visitor_func{&_generic_visitor_func<T>}
+        {
+            std::invoke(std::forward<F>(constructor), static_cast<void*>(_data));
         }
 
         ~SmallAny() {
@@ -172,45 +187,29 @@ namespace serialpp {
         SmallAny& operator=(SmallAny&&) = delete;
         SmallAny& operator=(SmallAny const&) = delete;
 
-        void visit(Visitor& visitor) {
-            assert(_visitor_func);
-            _visitor_func(_data, false, true, &visitor);
-        }
-
         void visit(Visitor& visitor) const {
             assert(_visitor_func);
-            _visitor_func(_data, true, true, &visitor);
+            _visitor_func(_data, true, &visitor);
         }
 
     private:
         alignas(Align) std::byte _data[MaxSize];
-        void (*_visitor_func)(void const*, bool, bool, Visitor*);
+        void (*_visitor_func)(void const*, bool, Visitor*);
 
         void _destruct() noexcept {
             if (_visitor_func) {
-                _visitor_func(_data, false, false, nullptr);
+                _visitor_func(_data, false, nullptr);
             }
         }
 
         template<typename T>
-        static void _generic_visitor_func(void const* data, bool is_const, bool operation, Visitor* visitor) {
-            if (is_const) {
-                auto const p = static_cast<T const*>(data);
-                if (operation) {
-                    (*visitor)(*p);
-                }
-                else {
-                    p->~T();
-                }
+        static void _generic_visitor_func(void const* data, bool operation, Visitor* visitor) {
+            auto const p = static_cast<T const*>(data);
+            if (operation) {
+                (*visitor)(*p);
             }
             else {
-                auto const p = static_cast<T*>(const_cast<void*>(data));
-                if (operation) {
-                    (*visitor)(*p);
-                }
-                else {
-                    p->~T();
-                }
+                p->~T();
             }
         }
     };

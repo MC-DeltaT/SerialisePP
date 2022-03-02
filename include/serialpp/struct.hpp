@@ -68,7 +68,7 @@ namespace serialpp {
     }
 
 
-    template<class T>
+    template<typename T>
     concept Struct =
         IsFieldsList<typename T::Fields>::value && impl::IsDerivedFromSerialisableStruct<T, typename T::Fields>::value;
 

@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <initializer_list>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <typeinfo>
@@ -107,91 +108,81 @@ namespace serialpp::test {
         std::uint64_t>);
 
     STEST_CASE(SmallAny_ConstructDestruct) {
-        std::size_t constructions = 0;
-        std::size_t destructions = 0;
+        LifecycleData lifecycle;
         {
-            SmallAny<sizeof(LifecycleObserver), alignof(LifecycleObserver), MockSmallAnyVisitor<LifecycleObserver>>
-                const any{std::in_place_type<LifecycleObserver>, constructions, destructions, 13};
-            test_assert(constructions == 1);
-            test_assert(destructions == 0);
+            SmallAny<sizeof(LifecycleObserver<int>), alignof(LifecycleObserver<int>), MockSmallAnyVisitor<LifecycleObserver<int>>>
+                const any{std::in_place_type<LifecycleObserver<int>>, lifecycle, 13};
+            test_assert(lifecycle == LifecycleData{.constructs = 1});
         }
-        test_assert(constructions == 1);
-        test_assert(destructions == 1);
+        test_assert(lifecycle == LifecycleData{.constructs = 1, .destructs = 1});
     }
 
     STEST_CASE(SmallAny_MoveConstruct1) {
-        std::size_t constructions = 0;
-        std::size_t destructions = 0;
+        using ValueType = LifecycleObserver<std::optional<int>>;
+        LifecycleData lifecycle;
         {
-            SmallAny<sizeof(LifecycleObserver), alignof(LifecycleObserver), MockSmallAnyVisitor<LifecycleObserver>>
-                any1{std::in_place_type<LifecycleObserver>, constructions, destructions, 13};
-            test_assert(constructions == 1);
-            test_assert(destructions == 0);
+            SmallAny<sizeof(ValueType), alignof(ValueType), MockSmallAnyVisitor<ValueType>>
+                any1{std::in_place_type<ValueType>, lifecycle, 13};
+            test_assert(lifecycle == LifecycleData{.constructs = 1});
             decltype(any1) any2{std::move(any1)};
-            test_assert(constructions == 1);
-            test_assert(destructions == 0);
+            test_assert(lifecycle == LifecycleData{.constructs = 1});
             decltype(any2) const any3{std::move(any2)};
-            test_assert(constructions == 1);
-            test_assert(destructions == 0);
+            test_assert(lifecycle == LifecycleData{.constructs = 1});
 
-            MockSmallAnyVisitor<LifecycleObserver> visitor;
+            MockSmallAnyVisitor<ValueType> visitor;
             any3.visit(visitor);
             test_assert(visitor.value);
-            test_assert(visitor.value->tag.has_value());
-            test_assert(visitor.value->tag.value() == 13);
+            test_assert(visitor.value->value.has_value());
+            test_assert(visitor.value->value.value() == 13);
         }
-        test_assert(constructions == 1);
-        test_assert(destructions == 1);
+        test_assert(lifecycle == LifecycleData{.constructs = 1, .destructs = 1});
     }
 
     STEST_CASE(SmallAny_MoveConstruct2) {
+        using ValueType = std::vector<long>;
         // Check move for a contained type which manages resources (i.e. will crash if move is broken).
-        SmallAny<sizeof(std::vector<long>), alignof(std::vector<long>), MockSmallAnyVisitor<std::vector<long>>>
-            any1{std::in_place_type<std::vector<long>>, std::initializer_list<long>{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}};
+        SmallAny<sizeof(ValueType), alignof(ValueType), MockSmallAnyVisitor<ValueType>>
+            any1{std::in_place_type<ValueType>, std::initializer_list<long>{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}};
         decltype(any1) any2{std::move(any1)};
         decltype(any2) any3{std::move(any2)};
     }
 
     STEST_CASE(SmallAny_VisitNonConst) {
-        std::size_t constructions = 0;
-        std::size_t destructions = 0;
+        using ValueType = LifecycleObserver<std::optional<int>>;
+        LifecycleData lifecycle;
         {
-            SmallAny<sizeof(LifecycleObserver), alignof(LifecycleObserver), MockSmallAnyVisitor<LifecycleObserver>>
-                any{std::in_place_type<LifecycleObserver>, constructions, destructions, 13};
-            test_assert(constructions == 1);
-            test_assert(destructions == 0);
+            SmallAny<sizeof(ValueType), alignof(ValueType), MockSmallAnyVisitor<ValueType>>
+                any{std::in_place_type<ValueType>, lifecycle, 13};
+            test_assert(lifecycle == LifecycleData{.constructs = 1});
 
-            MockSmallAnyVisitor<LifecycleObserver> visitor;
+            MockSmallAnyVisitor<ValueType> visitor;
             any.visit(visitor);
             test_assert(visitor.value);
-            test_assert(visitor.value->tag.has_value());
-            test_assert(visitor.value->tag.value() == 13);
+            test_assert(visitor.value->value.has_value());
+            test_assert(visitor.value->value.value() == 13);
             test_assert(visitor.type);
-            test_assert(*visitor.type == typeid(LifecycleObserver&));
+            test_assert(*visitor.type == typeid(ValueType&));
         }
-        test_assert(constructions == 1);
-        test_assert(destructions == 1);
+        test_assert(lifecycle == LifecycleData{.constructs = 1, .destructs = 1});
     }
 
     STEST_CASE(SmallAny_VisitConst) {
-        std::size_t constructions = 0;
-        std::size_t destructions = 0;
+        using ValueType = LifecycleObserver<std::optional<int>>;
+        LifecycleData lifecycle;
         {
-            SmallAny<sizeof(LifecycleObserver), alignof(LifecycleObserver), MockSmallAnyVisitor<LifecycleObserver>>
-                const any{std::in_place_type<LifecycleObserver>, constructions, destructions, 13};
-            test_assert(constructions == 1);
-            test_assert(destructions == 0);
+            SmallAny<sizeof(ValueType), alignof(ValueType), MockSmallAnyVisitor<ValueType>>
+                const any{std::in_place_type<ValueType>, lifecycle, 13};
+            test_assert(lifecycle == LifecycleData{.constructs = 1});
 
-            MockSmallAnyVisitor<LifecycleObserver> visitor;
+            MockSmallAnyVisitor<ValueType> visitor;
             any.visit(visitor);
             test_assert(visitor.value);
-            test_assert(visitor.value->tag.has_value());
-            test_assert(visitor.value->tag.value() == 13);
+            test_assert(visitor.value->value.has_value());
+            test_assert(visitor.value->value.value() == 13);
             test_assert(visitor.type);
-            test_assert(*visitor.type == typeid(LifecycleObserver const&));
+            test_assert(*visitor.type == typeid(ValueType const&));
         }
-        test_assert(constructions == 1);
-        test_assert(destructions == 1);
+        test_assert(lifecycle == LifecycleData{.constructs = 1, .destructs = 1});
     }
 
 }

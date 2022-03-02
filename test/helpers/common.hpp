@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <compare>
 #include <cstddef>
 #include <optional>
 #include <span>

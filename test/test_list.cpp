@@ -4,7 +4,6 @@
 #include <cstdint>
 #include <ranges>
 #include <stdexcept>
-#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -14,6 +13,7 @@
 
 #include "helpers/common.hpp"
 #include "helpers/test.hpp"
+#include "helpers/utility.hpp"
 
 
 namespace serialpp::test {
@@ -26,32 +26,37 @@ namespace serialpp::test {
     }
 
     STEST_CASE(SerialiseSource_List_BracedInit) {
-        SerialiseSource<List<long>> const source1{{1, 2u, 'c'}};
-        SerialiseSource<List<long>> const source2{{1}};
+        SerialiseSource<List<long>> const source1{{1}};
+        SerialiseSource<List<std::uint8_t>> const source2{{1, 2u, 'c'}};    // Small range optimisation
+        SerialiseSource<List<std::uint64_t>> const source3{{1, 2, 3, 4, 5, 6, 7, 8}};   // Large range
     }
 
-    STEST_CASE(SerialiseSource_List_ViewSmallRange) {
+    STEST_CASE(SerialiseSource_List_BorrowSmallRange) {
         std::vector<int> const v;
         auto const r = std::ranges::ref_view(v);
         SerialiseSource<List<long>> const source{r};
     }
 
-    STEST_CASE(SerialiseSource_List_ViewLargeRange) {
-        std::unordered_set<int> set{1, 2, 3};
-        SerialiseSource<List<long>> const source{set};
-        test_assert(!set.empty());
+    STEST_CASE(SerialiseSource_List_BorrowLargeRange) {
+        LifecycleData lifecycle;
+        std::array<LifecycleObserver<SerialiseSource<int>>, 4> range{
+            {{lifecycle, 1}, {lifecycle, 2}, {lifecycle, 3}, {lifecycle, 4}}};
+        SerialiseSource<List<int>> const source{range};
+        test_assert(lifecycle == LifecycleData{.constructs = 4});
     }
 
     STEST_CASE(SerialiseSource_List_OwnSmallRange) {
         std::vector<int> const v;
-        auto const r = std::ranges::ref_view(v);
+        auto r = std::ranges::ref_view(v);
         SerialiseSource<List<long>> const source{std::move(r)};
     }
 
     STEST_CASE(SerialiseSource_List_OwnLargeRange) {
-        std::unordered_set<int> set{1, 2, 3};
-        SerialiseSource<List<long>> const source{std::move(set)};
-        test_assert(set.empty());
+        LifecycleData lifecycle;
+        std::array<LifecycleObserver<SerialiseSource<int>>, 4> range{
+            {{lifecycle, 1}, {lifecycle, 2}, {lifecycle, 3}, {lifecycle, 4}}};
+        SerialiseSource<List<int>> const source{std::move(range)};
+        test_assert(lifecycle == LifecycleData{.constructs = 4, .move_constructs = 4});
     }
 
     STEST_CASE(SerialiseSource_List_OwnEmptyRange) {

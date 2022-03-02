@@ -1,5 +1,7 @@
 #pragma once
 
+#include <compare>
+#include <concepts>
 #include <optional>
 #include <typeinfo>
 #include <utility>
@@ -16,38 +18,71 @@ namespace serialpp::test {
     };
 
 
+    struct LifecycleData {
+        std::size_t constructs = 0;
+        std::size_t destructs = 0;
+        std::size_t move_constructs = 0;
+        std::size_t copy_constructs = 0;
+        std::size_t move_assigns = 0;
+        std::size_t copy_assigns = 0;
+
+        [[nodiscard]]
+        friend constexpr auto operator<=>(LifecycleData const&, LifecycleData const&) = default;
+    };
+
+
+    template<std::regular T>
     class LifecycleObserver {
     public:
-        std::optional<int> tag;
+        T value;
 
-        LifecycleObserver(std::size_t& constructions, std::size_t& destructions, int tag) :
-            _constructions{&constructions}, _destructions{&destructions}, tag{tag}
+        template<typename... Args> requires std::constructible_from<T, Args...>
+        LifecycleObserver(LifecycleData& lifecycle, Args&&... args) :
+           _lifecycle{&lifecycle}, value{std::forward<Args>(args)...}
         {
-            ++*_constructions;
+            ++_lifecycle->constructs;
         }
 
-        LifecycleObserver(LifecycleObserver&& other) :
-            _constructions{other._constructions}, _destructions{other._destructions}, tag{std::move(other.tag)}
+        LifecycleObserver(LifecycleObserver&& other) noexcept :
+            _lifecycle{other._lifecycle}, value{std::move(other.value)}
         {
-            ++*_constructions;
+            ++_lifecycle->move_constructs;
         }
 
         LifecycleObserver(LifecycleObserver const& other) :
-            _constructions{other._constructions}, _destructions{other._destructions}, tag{other.tag}
+            _lifecycle{other._lifecycle}, value{other.value}
         {
-            ++*_constructions;
+            ++_lifecycle->copy_constructs;
         }
 
         ~LifecycleObserver() {
-            ++*_destructions;
+            ++_lifecycle->destructs;
         }
 
-        LifecycleObserver& operator=(LifecycleObserver&&) = default;
-        LifecycleObserver& operator=(LifecycleObserver const&) = default;
+        LifecycleObserver& operator=(LifecycleObserver&& other) noexcept {
+            // Assume _lifecycle == other._lifecycle
+            ++_lifecycle->move_assigns;
+            value = std::move(other.value);
+            return *this;
+        }
+
+        LifecycleObserver& operator=(LifecycleObserver const& other) {
+            // Assume _lifecycle == other._lifecycle
+            ++_lifecycle->copy_assigns;
+            value = other.value;
+            return *this;
+        }
+
+        operator T&() noexcept {
+            return value;
+        }
+
+        operator T const&() const noexcept {
+            return value;
+        }
 
     private:
-        std::size_t* _constructions;
-        std::size_t* _destructions;
+        LifecycleData* _lifecycle;
     };
 
 

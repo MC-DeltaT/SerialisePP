@@ -8,6 +8,7 @@
 #include <format>
 #include <limits>
 #include <memory>
+#include <new>
 #include <optional>
 #include <ranges>
 #include <stdexcept>
@@ -68,7 +69,7 @@ namespace serialpp {
     template<Serialisable T>
     class SerialiseSource<List<T>> {
     public:
-        // TODO: copyable
+        // TODO: copyable?
 
         // Constructs with 0 elements.
         SerialiseSource() :
@@ -80,25 +81,52 @@ namespace serialpp {
         SerialiseSource(SerialiseSource<T> (&& elements)[N]) :
             _range{EmptyRange{}}
         {
-            _initialise_from_generic_range(std::to_array(std::move(elements)));
+            if constexpr (N > 0) {
+                // We initialise here directly from the elements to avoid unnecessary moves.
+                using RangeType = std::array<SerialiseSource<T>, N>;
+                // If the array is small enough, put it in the stack-allocated buffer.
+                if constexpr (SmallRangeWrapper::template can_contain<RangeType>()) {
+                    [this, &elements] <std::size_t... Is> (std::index_sequence<Is...>) {
+                        // Use emplace() rather than assign to avoid a move, which isn't free for SmallRangeWrapper.
+                        _range.emplace<SmallRangeWrapper>([&elements](void* data) {
+                            return new(data) RangeType{{std::move(elements[Is])...}};
+                        });
+                    }(std::make_index_sequence<N>{});
+                }
+                // Otherwise have to dynamically allocate space to type-erase the range.
+                else {
+                    [this, &elements] <std::size_t... Is> (std::index_sequence<Is...>) {
+                        _range.emplace<std::unique_ptr<LargeRangeWrapperBase>>(
+                            new LargeRangeWrapper<RangeType>{std::move(elements[Is])...});
+                    }(std::make_index_sequence<N>{});
+                }
+            }
         }
 
         // Constructs from the elements of a range. The range must have <= MAX_LIST_SIZE elements.
-        // If the range is safe to view, then a view is taken (i.e. this object won't own the elements).
-        // Otherwise the range is moved or copied from.
-        template<class R> requires ListSerialiseSourceRange<R, T>
+        // The range is stored within an instance of std::ranges::views::all.
+        template<std::ranges::viewable_range R> requires ListSerialiseSourceRange<std::ranges::views::all_t<R>, T>
         SerialiseSource(R&& range) :
             _range{EmptyRange{}}
         {
-            assert(std::size(std::forward<R>(range)) <= MAX_LIST_SIZE);
+            assert(std::size(range) <= MAX_LIST_SIZE);
 
-            // If the range is viewable and it's not already a view, then make a view of it.
-            if constexpr (std::ranges::viewable_range<R> && !std::ranges::view<R>) {
-                _initialise_from_generic_range(std::ranges::ref_view(std::forward<R>(range)));
+            // We initialise here directly from the original range to avoid unnecessary moves.
+            using RangeType = std::ranges::views::all_t<R>;
+            // If we're owning the elements and it's empty, just store EmptyRange instead.
+            if (!std::ranges::borrowed_range<R> && std::ranges::empty(range)) {
+                // _range already has EmptyRange.
+                assert(std::holds_alternative<EmptyRange>(_range));
             }
-            // Otherwise move or copy the range into our storage.
+            // If the range object is small enough, put it in the stack-allocated buffer.
+            else if constexpr (SmallRangeWrapper::template can_contain<RangeType>()) {
+                // Use emplace() rather than assign to avoid a move, which isn't free for SmallRangeWrapper.
+                _range.emplace<SmallRangeWrapper>(std::in_place_type<RangeType>, std::forward<R>(range));
+            }
+            // Otherwise have to dynamically allocate space to type-erase the range.
             else {
-                _initialise_from_generic_range(std::forward<R>(range));
+                _range.emplace<std::unique_ptr<LargeRangeWrapperBase>>(
+                    new LargeRangeWrapper<RangeType>{std::forward<R>(range)});
             }
         }
 
@@ -157,7 +185,7 @@ namespace serialpp {
             virtual SerialiseVisitResult visit(SerialiseVisitorImpl const& visitor) const = 0;
         };
 
-        template<class R>
+        template<typename R>
         struct LargeRangeWrapper : LargeRangeWrapperBase {
             R range;
 
@@ -189,32 +217,13 @@ namespace serialpp {
         };
 
         // TODO: can we integrate the small range wrapper into the outer variant to avoid extra bookkeeping?
+        
         // The most common range types are small, so we can often avoid allocating on the heap.
         std::variant<
             EmptyRange,
             SmallRangeWrapper,
             std::unique_ptr<LargeRangeWrapperBase>
         > _range;
-
-        template<typename R>
-        void _initialise_from_generic_range(R&& range) {
-            using RangeType = std::remove_cvref_t<R>;
-            // If we're owning the elements and it's empty, just store EmptyRange instead.
-            if (!std::ranges::borrowed_range<R> && std::ranges::empty(range)) {
-                // _range already has EmptyRange.
-                assert(std::holds_alternative<EmptyRange>(_range));
-            }
-            // If the range object is small enough, put it in the stack-allocated buffer.
-            else if constexpr (std::constructible_from<SmallRangeWrapper, std::in_place_type_t<RangeType>, R&&>) {
-                // Use emplace() rather than assign to avoid a move, which isn't free for SmallRangeWrapper.
-                _range.emplace<SmallRangeWrapper>(std::in_place_type<RangeType>, std::forward<R>(range));
-            }
-            // Otherwise have to dynamically allocate space to type-erase the range.
-            else {
-                _range.emplace<std::unique_ptr<LargeRangeWrapperBase>>(
-                    new LargeRangeWrapper<RangeType>{std::forward<R>(range)});
-            }
-        }
 
         SerialiseVisitResult _visit(SerialiseVisitor const& visitor) const {
             return std::visit(visitor, _range);
