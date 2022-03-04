@@ -7,7 +7,6 @@
 #include <type_traits>
 
 #include "common.hpp"
-#include "scalar.hpp"
 #include "utility.hpp"
 
 
@@ -19,7 +18,7 @@ namespace serialpp {
     */
 
 
-   // TODO: struct inheritance?
+    // TODO: struct inheritance?
 
 
     // Specifies a field of a SerialisableStruct.
@@ -184,7 +183,7 @@ namespace serialpp {
                 this->_fixed_data.subspan(offset, FIXED_DATA_SIZE<FieldT>),
                 this->_variable_data
             };
-            return auto_deserialise_scalar(deserialiser);
+            return auto_deserialise(deserialiser);
         }
     };
 

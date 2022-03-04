@@ -40,7 +40,7 @@ namespace serialpp::test {
             buffer.span()[3 + i] = static_cast<std::byte>(i + 1);
         }
         SerialiseSource<Variant<std::uint32_t, std::byte, std::int64_t>> const source{
-            std::in_place_index<2>, 3'245'678ll};
+            std::in_place_index<2>, 3'245'678};
         SerialiseTarget const target{buffer, 3, 0, 3, 13};
         Serialiser<Variant<std::uint32_t, std::byte, std::int64_t>> const serialiser;
         auto const new_target = serialiser(source, target);
@@ -74,12 +74,13 @@ namespace serialpp::test {
             0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A,     // Dummy padding
             0x6E, 0x86, 0x31, 0x00, 0x00, 0x00, 0x00, 0x00      // Value
         };
-        auto const deserialiser = deserialise<Variant<std::uint32_t, std::byte, std::int64_t>>(
+        auto const deserialiser = deserialise<Variant<std::uint32_t, std::uint8_t, std::int64_t>>(
             as_const_bytes_view(buffer));
         test_assert(deserialiser.index() == 2);
-        test_assert(deserialiser.get<2>() == 3'245'678ll);
+        test_assert(deserialiser.get<2>() == 3'245'678);
         test_assert(42 == deserialiser.visit([](auto value) {
             test_assert(std::same_as<decltype(value), std::int64_t>);
+            test_assert(value == 3'245'678);
             return 42;
         }));
         test_assert_throws<std::bad_variant_access>([&deserialiser] { (void)deserialiser.get<0>(); });

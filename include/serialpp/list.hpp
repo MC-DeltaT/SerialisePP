@@ -276,7 +276,7 @@ namespace serialpp {
                 this->_variable_data.subspan(element_offset, FIXED_DATA_SIZE<T>),
                 this->_variable_data
             };
-            return auto_deserialise_scalar(deserialiser);
+            return auto_deserialise(deserialiser);
         }
 
         // Gets the element at the specified index. Throws std::out_of_range if index is out of bounds.

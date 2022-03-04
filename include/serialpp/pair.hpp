@@ -6,7 +6,6 @@
 #include <utility>
 
 #include "common.hpp"
-#include "scalar.hpp"
 #include "utility.hpp"
 
 
@@ -57,7 +56,7 @@ namespace serialpp {
                 this->_fixed_data.first(FIXED_DATA_SIZE<T1>),
                 this->_variable_data
             };
-            return auto_deserialise_scalar(deserialiser);
+            return auto_deserialise(deserialiser);
         }
 
         // Gets the second element.
@@ -67,7 +66,7 @@ namespace serialpp {
                 this->_fixed_data.subspan(FIXED_DATA_SIZE<T1>, FIXED_DATA_SIZE<T2>),
                 this->_variable_data
             };
-            return auto_deserialise_scalar(deserialiser);
+            return auto_deserialise(deserialiser);
         }
 
         // Gets an element by index.

@@ -116,7 +116,7 @@ namespace serialpp {
         }
 
         // Invokes the specified function with the contained value as the argument.
-        template<typename F> requires (std::invocable<F, AutoDeserialiseScalarResult<Ts>> && ...)
+        template<typename F> requires (std::invocable<F, AutoDeserialiseResult<Ts>> && ...)
         decltype(auto) visit(F&& visitor) const {
             if constexpr (sizeof...(Ts) > 0) {
                 return _visit<0>(std::forward<F>(visitor), index());
@@ -142,11 +142,11 @@ namespace serialpp {
                 this->_variable_data.subspan(offset),
                 this->_variable_data
             };
-            return auto_deserialise_scalar(deserialiser);
+            return auto_deserialise(deserialiser);
         }
 
         template<std::size_t I, typename F>
-            requires (sizeof...(Ts) > 0) && (std::invocable<F, AutoDeserialiseScalarResult<Ts>> && ...)
+            requires (sizeof...(Ts) > 0) && (std::invocable<F, AutoDeserialiseResult<Ts>> && ...)
         decltype(auto) _visit(F&& visitor, std::size_t index) const {
             assert(index < sizeof...(Ts));
             if (I == index) {

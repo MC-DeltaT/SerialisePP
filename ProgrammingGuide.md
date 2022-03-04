@@ -70,6 +70,14 @@ Also note that the behaviour of `Deserialiser<T>` is dependent on `T`.
 Different types have different member functions for deserialisation.
 Particularly, `Deserialiser` for compound types can produce more `Deserialiser` instances for the contained data.
 
+## Automatic Deserialisation
+
+Certain basic types, such as integers, support "automatic deserialisation" in many contexts within Serialise++, for ease of use.
+If a compound type `C` contains an automatically deserialisable type `A`, then `Deserialiser<C>` won't give you a `Deserialiser<A>`, it will just give you the value of `A` already deserialised.
+
+Automatic deserialisation is enabled with the `AUTO_DESERIALISE<T>` variable template.  
+The associated deserialised value type is given by `AutoDeserialiseResult<T>`.
+
 ## Type Support
 
 Serialise++ provides types to support more complex data.
@@ -90,8 +98,7 @@ It's constructible from a scalar value and implicitly convertible to the scalar 
 
 `Deserialiser` for a scalar provides a member function `value()` which deserialises and returns the scalar value.
 
-Because scalars the bread-and-butter types, they support "automatic deserialisation" in many contexts within Serialise++.
-If a nonscalar type `C` contains a scalar type `S`, then `Deserialiser<C>` won't give you a `Deserialiser<S>`, it will just give you the instance of `S` already deserialised.
+All scalar types support automatic deserialisation.
 
 ### Array
 
@@ -106,10 +113,10 @@ SerialiseSource<Array<long, 4>> const source{{1, 2, 3, 4}};
 `Deserialiser` for an `Array<T, N>` has the following member functions:
 
  - `size()`: returns the number of elements (always `N`).
- - `operator[](index)`: returns a `Deserialiser<T>` (or `T` for scalar `T`) for an element at the specified index. The index must be in the range `[0, N)`.
+ - `operator[](index)`: returns a `Deserialiser<T>` (or deserialised value for automatically deserialisable `T`) for the element at the specified index. The index must be in the range `[0, N)`.
  - `at(index)`: like `operator[]` but throws `std::out_of_range` if the index is out of bounds.
  - `get<I>()`: like `operator[]`, but checks the index at compile time.
- - `elements()`: returns a view of that yields `Deserialiser<T>` (or `T` for scalar `T`) for each element.
+ - `elements()`: returns a view of that yields `Deserialiser<T>` (or deserialised value for automatically deserialisable `T`) for each element.
 
 ### List
 
@@ -133,7 +140,7 @@ SerialiseSource<List<long>> const source{vec};
 std::vector<int> vec{1, 2, 3};
 SerialiseSource<List<long>> const source{std::move(vec)};
 
-// Construct to own a viewable_range:
+// Construct to own a view:
 auto const v = std::ranges::views::iota(1, 4);
 SerialiseSource<List<long>> const source{v};
 ```
@@ -142,9 +149,9 @@ SerialiseSource<List<long>> const source{v};
 
  - `size()`: returns the number of elements.
  - `empty()`: returns `true` if there are zero elements, `false` otherwise.
- - `operator[](index)`: returns a `Deserialiser<T>` (or `T` for scalar `T`) for an element at the specified index. The index must be in the range `[0, size())`.
+ - `operator[](index)`: returns a `Deserialiser<T>` (or deserialised value for automatically deserialisable `T`) for an element at the specified index. The index must be in the range `[0, size())`.
  - `at(index)`: like `operator[]` but throws `std::out_of_range` if the index is out of bounds.
- - `elements()`: returns a view of that yields `Deserialiser<T>` (or `T` for scalar `T`) for each element.
+ - `elements()`: returns a view of that yields `Deserialiser<T>` (or deserialised value for automatically deserialisable `T`) for each element.
 
 ### Optional
 
@@ -155,7 +162,7 @@ SerialiseSource<List<long>> const source{v};
 `Deserialiser` for an `Optional<T>` has the following member functions:
 
  - `has_value()`: returns `true` if an instance of `T` is contained, otherwise it returns `false`.
- - `operator*()`: returns a `Deserialiser<T>` (or `T` for scalar `T`). May only be called if `has_value() == true`.
+ - `operator*()`: returns a `Deserialiser<T>` (or deserialised value for automatically deserialisable `T`). May only be called if `has_value() == true`.
  - `value()`: like `operator*`, but throws `std::bad_optional_access` if `has_value() == false`.
 
 ### Variant
@@ -168,8 +175,8 @@ If `Ts` is empty, then a `std::variant<std::monostate>`, since `std::variant` ca
 `Deserialiser` for a `Variant<Ts...>` has the following member functions:
 
  - `index()`: returns the zero-based index of the contained type. (Only if `Ts` is not empty.)
- - `get<I>()`: gets the contained value if `I == index()`, otherwise throws `std::bad_variant_access`.
- - `visit(func)`: invokes a function with the contained value as the argument.
+ - `get<I>()`: gets a `Deserialiser` for the contained type (or deserialised value for automatically deserialisable types) if `I == index()`, otherwise throws `std::bad_variant_access`.
+ - `visit(func)`: invokes a function with a `Deserialiser` for the contained type (or deserialised value for automatically deserialisable types) as the argument.
 
 ### Pair
 
@@ -179,8 +186,8 @@ If `Ts` is empty, then a `std::variant<std::monostate>`, since `std::variant` ca
 
 `Deserialiser` for a `Pair<T1, T2>` has the following member functions:
 
- - `first()`: returns a `Deserialiser<T1>` (or `T1` for scalar `T1`).
- - `second()`: returns a `Deserialiser<T2>` (or `T2` for scalar `T2`).
+ - `first()`: returns a `Deserialiser<T1>` (or deserialised value for automatically deserialisable `T1`).
+ - `second()`: returns a `Deserialiser<T2>` (or deserialised value for automatically deserialisable `T2`).
  - `get<I>()`: returns `first()` for `I == 0`, and `second()` for `I == 1`.
 
 The deserialiser is also destructurable into its two elements using structured bindings.
@@ -211,7 +218,7 @@ The fields are solely for informing Serialise++ what fields to serialise.
 It can be constructed from an initializer-list of elements like `std::tuple`.
 It has the member function `get<Name>()` which gets a reference to a field by name.
 
-`Deserialiser` for a `SerialisableStruct` has the member function `get<Name>()` which gets a `Deserialiser` (or scalar value, for scalar types) for a field by name.
+`Deserialiser` for a `SerialisableStruct` has the member function `get<Name>()` which gets a `Deserialiser` (or the deserialised value, for automatically deserialisable types) for a field by name.
 
 ## Real-world Example
 

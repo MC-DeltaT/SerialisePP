@@ -274,6 +274,28 @@ namespace serialpp {
     };
 
 
+    // Specialising to true enables automatic deserialisation of T when requesting a T from a deserialiser for a
+    // compound type. If enabled, the deserialiser must have a `value()` member function.
+    template<Serialisable T>
+    inline static constexpr bool AUTO_DESERIALISE = false;
+
+    // If AUTO_DESERIALISE<T> is true, then returns the deserialised value, otherwise returns deserialiser unchanged.
+    template<Serialisable T>
+    [[nodiscard]]
+    decltype(auto) auto_deserialise(Deserialiser<T> const& deserialiser) {
+        if constexpr (AUTO_DESERIALISE<T>) {
+            return deserialiser.value();
+        }
+        else {
+            return deserialiser;
+        }
+    }
+
+    // Gets the type resulting from performing automatic deserialisation.
+    template<Serialisable T>
+    using AutoDeserialiseResult = decltype(auto_deserialise(std::declval<Deserialiser<T>>()));
+
+
     // Serialises an entire object.
     template<Serialisable T>
     void serialise(SerialiseSource<T> const& source, SerialiseBuffer& buffer) {

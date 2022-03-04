@@ -80,7 +80,7 @@ Fixed data: 1 byte. Serialise++ serialises `true` to `0x01` and `false` to `0x00
 
 Variable data: none.
 
-### Floating point numbers
+### Floating Point Numbers
 
 Includes `float` and `double`.
 

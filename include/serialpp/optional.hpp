@@ -81,7 +81,7 @@ namespace serialpp {
                 this->_variable_data
             };
 
-            return auto_deserialise_scalar(deserialiser);
+            return auto_deserialise(deserialiser);
         }
 
         // Gets the contained value. If has_value() is false, throws std::bad_optional_access.
