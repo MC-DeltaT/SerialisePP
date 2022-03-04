@@ -6,6 +6,7 @@
 #include <ranges>
 
 #include "common.hpp"
+#include "scalar.hpp"
 #include "utility.hpp"
 
 

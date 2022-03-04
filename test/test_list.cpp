@@ -18,6 +18,8 @@
 
 namespace serialpp::test {
 
+    // TODO: testing with MockSerialisable?
+
     static_assert(FIXED_DATA_SIZE<List<std::int8_t>> == 2 + 2);
     static_assert(FIXED_DATA_SIZE<List<MockSerialisable<1000>>> == 2 + 2);
 

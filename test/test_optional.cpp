@@ -12,6 +12,8 @@
 
 namespace serialpp::test {
 
+    // TODO: testing with MockSerialisable?
+
     static_assert(FIXED_DATA_SIZE<Optional<char>> == 2);
     static_assert(FIXED_DATA_SIZE<Optional<std::uint64_t>> == 2);
     static_assert(FIXED_DATA_SIZE<Optional<MockSerialisable<10000>>> == 2);

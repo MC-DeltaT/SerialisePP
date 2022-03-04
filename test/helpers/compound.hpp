@@ -9,6 +9,7 @@
 #include <serialpp/pair.hpp>
 #include <serialpp/scalar.hpp>
 #include <serialpp/struct.hpp>
+#include <serialpp/variant.hpp>
 
 
 namespace serialpp::test {
@@ -27,7 +28,8 @@ namespace serialpp::test {
     > {};
 
     struct CompoundTestStruct3 : SerialisableStruct<
-        Field<"pair_struct2_struct1", Pair<CompoundTestStruct2, CompoundTestStruct1>>
+        Field<"pair_struct2_struct1", Pair<CompoundTestStruct2, CompoundTestStruct1>>,
+        Field<"var_struct1_struct2", Variant<CompoundTestStruct2, CompoundTestStruct1>>
     > {};
 
 }

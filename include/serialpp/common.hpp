@@ -97,7 +97,7 @@ namespace serialpp {
     template<typename T>
     class DeserialiserBase {
     public:
-        constexpr DeserialiserBase(ConstBytesView fixed_data, ConstBytesView variable_data) noexcept :
+        DeserialiserBase(ConstBytesView fixed_data, ConstBytesView variable_data) :
             _fixed_data{fixed_data}, _variable_data{variable_data}
         {
             check_deserialise_buffer_fixed_size<T>(_fixed_data);
@@ -149,7 +149,7 @@ namespace serialpp {
     // Buffer of bytes into which values are serialised.
     class SerialiseBuffer {
     public:
-        SerialiseBuffer(std::size_t reserved_size = 4096) {
+        explicit SerialiseBuffer(std::size_t reserved_size = 4096) {
             _data.reserve(reserved_size);
         }
 

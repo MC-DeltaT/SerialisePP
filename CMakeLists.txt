@@ -17,6 +17,7 @@ add_executable(SerialisePPTest
     test/test_scalar.cpp
     test/test_struct.cpp
     test/test_utility.cpp
+    test/test_variant.cpp
 )
 target_include_directories(SerialisePPTest PRIVATE test/)
 target_link_libraries(SerialisePPTest PRIVATE SerialisePP SimpleTest)

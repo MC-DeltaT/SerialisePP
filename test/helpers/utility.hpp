@@ -37,7 +37,7 @@ namespace serialpp::test {
         T value;
 
         template<typename... Args> requires std::constructible_from<T, Args...>
-        LifecycleObserver(LifecycleData& lifecycle, Args&&... args) :
+        explicit(sizeof...(Args) == 0) LifecycleObserver(LifecycleData& lifecycle, Args&&... args) :
            _lifecycle{&lifecycle}, value{std::forward<Args>(args)...}
         {
             ++_lifecycle->constructs;

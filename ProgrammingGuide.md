@@ -106,8 +106,8 @@ SerialiseSource<Array<long, 4>> const source{{1, 2, 3, 4}};
 `Deserialiser` for an `Array<T, N>` has the following member functions:
 
  - `size()`: returns the number of elements (always `N`).
- - `operator[]`: returns a `Deserialiser<T>` (or `T` for scalar `T`) for an element at the specified index. The index must be in the range `[0, N)`.
- - `at()`: like `operator[]` but throws `std::out_of_range` if the index is out of bounds.
+ - `operator[](index)`: returns a `Deserialiser<T>` (or `T` for scalar `T`) for an element at the specified index. The index must be in the range `[0, N)`.
+ - `at(index)`: like `operator[]` but throws `std::out_of_range` if the index is out of bounds.
  - `get<I>()`: like `operator[]`, but checks the index at compile time.
  - `elements()`: returns a view of that yields `Deserialiser<T>` (or `T` for scalar `T`) for each element.
 
@@ -142,8 +142,8 @@ SerialiseSource<List<long>> const source{v};
 
  - `size()`: returns the number of elements.
  - `empty()`: returns `true` if there are zero elements, `false` otherwise.
- - `operator[]`: returns a `Deserialiser<T>` (or `T` for scalar `T`) for an element at the specified index. The index must be in the range `[0, size())`.
- - `at()`: like `operator[]` but throws `std::out_of_range` if the index is out of bounds.
+ - `operator[](index)`: returns a `Deserialiser<T>` (or `T` for scalar `T`) for an element at the specified index. The index must be in the range `[0, size())`.
+ - `at(index)`: like `operator[]` but throws `std::out_of_range` if the index is out of bounds.
  - `elements()`: returns a view of that yields `Deserialiser<T>` (or `T` for scalar `T`) for each element.
 
 ### Optional
@@ -155,8 +155,21 @@ SerialiseSource<List<long>> const source{v};
 `Deserialiser` for an `Optional<T>` has the following member functions:
 
  - `has_value()`: returns `true` if an instance of `T` is contained, otherwise it returns `false`.
- - `operator*`: returns a `Deserialiser<T>` (or `T` for scalar `T`). May only be called if `has_value() == true`.
+ - `operator*()`: returns a `Deserialiser<T>` (or `T` for scalar `T`). May only be called if `has_value() == true`.
  - `value()`: like `operator*`, but throws `std::bad_optional_access` if `has_value() == false`.
+
+### Variant
+
+`Variant<Ts...>` is a type which contains an instance of any type in `Ts`. `Ts` may be empty.
+
+`SerialiseSource` for a `Variant<Ts...>` is simply a `std::variant<SerialiseSource<Ts>...>`.
+If `Ts` is empty, then a `std::variant<std::monostate>`, since `std::variant` cannot have zero types.
+
+`Deserialiser` for a `Variant<Ts...>` has the following member functions:
+
+ - `index()`: returns the zero-based index of the contained type. (Only if `Ts` is not empty.)
+ - `get<I>()`: gets the contained value if `I == index()`, otherwise throws `std::bad_variant_access`.
+ - `visit(func)`: invokes a function with the contained value as the argument.
 
 ### Pair
 

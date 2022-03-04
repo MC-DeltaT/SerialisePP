@@ -16,14 +16,15 @@ But unlike Cap'n Proto and similar libraries, Serialise++ enables definition of 
    - Booleans
    - Static arrays
    - Dynamic arrays
-   - Optional
    - Pair
+   - Optional
+   - Variant
    - User-defined structs
  - Extensible serialisation for custom types
  - On-the-fly serialisation and deserialisation - no data duplication!
  - Fully contained within C++ (no separate message/type definition, no code generation)
 
-(Support for more types is likely to come in the future, e.g. strings, variants).
+(Support for more types is likely to come in the future, e.g. strings, void).
 
 ## Limitations
 

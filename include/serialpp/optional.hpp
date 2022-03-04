@@ -18,7 +18,7 @@ namespace serialpp {
     */
 
 
-    // Serialisable type which contains either 0 or 1 instance of a type.
+    // Serialisable type which contains either zero or one instance of a type.
     template<Serialisable T>
     struct Optional {};
 
@@ -77,7 +77,7 @@ namespace serialpp {
             offset -= 1;
             this->_check_variable_offset(offset);
             Deserialiser<T> const deserialiser{
-                this->_variable_data.subspan(offset),
+                this->_variable_data.subspan(offset, FIXED_DATA_SIZE<T>),
                 this->_variable_data
             };
 

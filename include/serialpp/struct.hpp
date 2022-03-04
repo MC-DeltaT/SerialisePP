@@ -7,6 +7,7 @@
 #include <type_traits>
 
 #include "common.hpp"
+#include "scalar.hpp"
 #include "utility.hpp"
 
 
@@ -21,7 +22,7 @@ namespace serialpp {
    // TODO: struct inheritance?
 
 
-    // Specified a field of a serialisable struct.
+    // Specifies a field of a SerialisableStruct.
     template<ConstantString Name, Serialisable T>
     struct Field {
         using Type = T;

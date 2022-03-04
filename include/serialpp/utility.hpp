@@ -5,6 +5,7 @@
 #include <concepts>
 #include <cstddef>
 #include <cstring>
+#include <functional>
 #include <new>
 #include <string_view>
 #include <type_traits>
@@ -25,13 +26,33 @@ namespace serialpp {
     struct TypeList;
 
     template<>
-    struct TypeList<> {};
+    struct TypeList<> {
+        static constexpr std::size_t SIZE = 0;
+    };
 
     template<typename T, typename... Ts>
     struct TypeList<T, Ts...> {
         using Head = T;
         using Tail = TypeList<Ts...>;
+
+        static constexpr std::size_t SIZE = 1 + sizeof...(Ts);
     };
+
+
+    namespace impl {
+
+        template<std::size_t I, class TList> requires (I < TList::SIZE)
+        struct TypeListElement : TypeListElement<I - 1, typename TList::Tail> {};
+
+        template<class TList>
+        struct TypeListElement<0, TList> : std::type_identity<typename TList::Head> {};
+
+    }
+
+    // Gets the type at the specified index of a TypeList.
+    // If I is out of bounds, a compile error occurs.
+    template<std::size_t I, class TList> requires (I < TList::SIZE)
+    using TypeListElement = typename impl::TypeListElement<I, TList>::type;
 
 
     // Fixed-length string for use as template arguments at compile time.
@@ -119,7 +140,7 @@ namespace serialpp {
         constexpr NamedTuple() = default;
 
         constexpr NamedTuple(typename Es::Type... elements) :
-            impl::DeferredBase<Es>{std::forward<typename Es::Type>(elements)}...
+            impl::DeferredBase<Es>{std::move(elements)}...
         {}
 
         // Gets an element by name.
@@ -154,7 +175,7 @@ namespace serialpp {
         }
 
         template<typename T, typename... Args> requires (can_contain<T>()) && std::constructible_from<T, Args...>
-        SmallAny(std::in_place_type_t<T>, Args&&... args) :
+        explicit SmallAny(std::in_place_type_t<T>, Args&&... args) :
             _visitor_func{&_generic_visitor_func<T>}
         {
             new(_data) T(std::forward<Args>(args)...);
@@ -163,7 +184,7 @@ namespace serialpp {
         // Construct using a provided function that does custom construction of the contained object.
         template<std::invocable<void*> F, typename T = std::remove_pointer_t<std::invoke_result_t<F, void*>>>
             requires (can_contain<T>())
-        SmallAny(F&& constructor) :
+        explicit SmallAny(F&& constructor) :
             _visitor_func{&_generic_visitor_func<T>}
         {
             std::invoke(std::forward<F>(constructor), static_cast<void*>(_data));

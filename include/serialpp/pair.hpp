@@ -6,6 +6,7 @@
 #include <utility>
 
 #include "common.hpp"
+#include "scalar.hpp"
 #include "utility.hpp"
 
 
@@ -17,7 +18,7 @@ namespace serialpp {
     */
 
 
-    // Serialisable tuple of 2 (possibly distinct) types.
+    // Serialisable tuple of two (possibly distinct) types.
     template<Serialisable T1, Serialisable T2>
     struct Pair {};
 

@@ -11,6 +11,8 @@
 
 namespace serialpp::test {
 
+    // TODO: testing with MockSerialisable?
+
     static_assert(FIXED_DATA_SIZE<Pair<std::int8_t, std::uint64_t>> == 9);
 
     STEST_CASE(Serialiser_Pair) {

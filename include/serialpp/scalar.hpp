@@ -8,6 +8,7 @@
 #include <cstring>
 #include <limits>
 #include <type_traits>
+#include <utility>
 
 #include "common.hpp"
 #include "utility.hpp"
@@ -200,19 +201,6 @@ namespace serialpp {
     };
 
 
-    // If deserialiser is for a scalar, then returns the deserialised value, otherwise returns deserialiser unchanged.
-    template<Serialisable T>
-    [[nodiscard]]
-    auto auto_deserialise_scalar(Deserialiser<T> const& deserialiser) {
-        if constexpr (Scalar<T>) {
-            return deserialiser.value();
-        }
-        else {
-            return deserialiser;
-        }
-    }
-
-
     /*
         Floating point numbers:
             Represented in IEEE-754 binary format and little endianness. float is 32 bytes, double is 64 bytes.
@@ -289,5 +277,25 @@ namespace serialpp {
             return value;
         }
     };
+
+
+    // TODO: generalise auto deserialisation
+
+    // If deserialiser is for a scalar, then returns the deserialised value, otherwise returns deserialiser unchanged.
+    template<Serialisable T>
+    [[nodiscard]]
+    decltype(auto) auto_deserialise_scalar(Deserialiser<T> const& deserialiser) {
+        if constexpr (Scalar<T>) {
+            return deserialiser.value();
+        }
+        else {
+            return deserialiser;
+        }
+    }
+
+
+    // Gets the type resulting from performing automatic scalar deserialisation.
+    template<Serialisable T>
+    using AutoDeserialiseScalarResult = decltype(auto_deserialise_scalar(std::declval<Deserialiser<T>>()));
 
 }

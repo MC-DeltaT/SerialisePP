@@ -47,12 +47,12 @@ namespace serialpp {
     }
 
 
-    // Serialisable variable-length homogeneous array. Can hold up to 2^16 - 1 elements.
+    // Serialisable variable-length homogeneous array. Can hold up to MAX_LIST_SIZE elements.
     template<Serialisable T>
     struct List {
         using SizeType = ListSizeType;
 
-        static constexpr std::size_t MAX_SIZE = MAX_LIST_SIZE;
+        static constexpr auto MAX_SIZE = MAX_LIST_SIZE;
     };
 
 
@@ -71,7 +71,7 @@ namespace serialpp {
     public:
         // TODO: copyable?
 
-        // Constructs with 0 elements.
+        // Constructs with zero elements.
         SerialiseSource() :
             _range{EmptyRange{}}
         {}
@@ -259,7 +259,7 @@ namespace serialpp {
             return Deserialiser<ListSizeType>{this->_fixed_data, this->_variable_data}.value();
         }
 
-        // Checks if the List contains no elements.
+        // Checks if the List contains zero elements.
         [[nodiscard]]
         bool empty() const {
             return size() == 0;
