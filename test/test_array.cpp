@@ -79,6 +79,10 @@ namespace serialpp::test {
         test_assert(deserialiser.at(1) == -1'630'057'274);
         test_assert(deserialiser[2] == 838'860'801);
         test_assert(deserialiser.at(2) == 838'860'801);
+        auto const [element0, element1, element2] = deserialiser;
+        test_assert(element0 == 1'170'411'248);
+        test_assert(element1 == -1'630'057'274);
+        test_assert(element2 == 838'860'801);
         for (std::size_t i = 3; i < 100; ++i) {
             test_assert_throws<std::out_of_range>([&deserialiser, i] {
                 (void)deserialiser.at(i);

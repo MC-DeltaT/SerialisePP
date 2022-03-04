@@ -52,7 +52,7 @@ namespace serialpp {
 
 
     template<Scalar S>
-    inline static constexpr bool AUTO_DESERIALISE<S> = true;
+    static inline constexpr bool AUTO_DESERIALISE<S> = true;
 
 
     // TODO: is it an issue that nonscalar serialisers adjust the fixed data offset, but scalar serialisers do not?

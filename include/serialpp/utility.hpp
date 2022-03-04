@@ -41,18 +41,18 @@ namespace serialpp {
 
     namespace impl {
 
-        template<std::size_t I, class TList> requires (I < TList::SIZE)
-        struct TypeListElement : TypeListElement<I - 1, typename TList::Tail> {};
+        template<class TList, std::size_t I> requires (I < TList::SIZE)
+        struct TypeListElement : TypeListElement<typename TList::Tail, I - 1> {};
 
         template<class TList>
-        struct TypeListElement<0, TList> : std::type_identity<typename TList::Head> {};
+        struct TypeListElement<TList, 0> : std::type_identity<typename TList::Head> {};
 
     }
 
     // Gets the type at the specified index of a TypeList.
     // If I is out of bounds, a compile error occurs.
-    template<std::size_t I, class TList> requires (I < TList::SIZE)
-    using TypeListElement = typename impl::TypeListElement<I, TList>::type;
+    template<class TList, std::size_t I> requires (I < TList::SIZE)
+    using TypeListElement = typename impl::TypeListElement<TList, I>::type;
 
 
     // Fixed-length string for use as template arguments at compile time.

@@ -31,7 +31,7 @@ namespace serialpp {
 
     using VariantIndexType = std::uint8_t;
 
-    inline static constexpr std::size_t MAX_VARIANT_TYPES = std::numeric_limits<VariantIndexType>::max();
+    static inline constexpr std::size_t MAX_VARIANT_TYPES = std::numeric_limits<VariantIndexType>::max();
 
 
     // Serialisable type that holds exactly one instance of a type from a set of possible types.
@@ -135,7 +135,7 @@ namespace serialpp {
         // Gets the contained value by index.
         template<std::size_t I> requires (I < sizeof...(Ts))
         auto _get() const {
-            using T = TypeListElement<I, TypeList<Ts...>>;
+            using T = TypeListElement<TypeList<Ts...>, I>;
             auto const offset = _offset();
             this->_check_variable_offset(offset);
             Deserialiser<T> const deserialiser{

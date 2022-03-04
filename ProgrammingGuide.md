@@ -118,6 +118,8 @@ SerialiseSource<Array<long, 4>> const source{{1, 2, 3, 4}};
  - `get<I>()`: like `operator[]`, but checks the index at compile time.
  - `elements()`: returns a view of that yields `Deserialiser<T>` (or deserialised value for automatically deserialisable `T`) for each element.
 
+The deserialiser is also destructurable into its `N` elements using structured bindings.
+
 ### List
 
 `List<T>` is a type which contains a variable-size ordered sequence of `T`.
@@ -219,6 +221,8 @@ It can be constructed from an initializer-list of elements like `std::tuple`.
 It has the member function `get<Name>()` which gets a reference to a field by name.
 
 `Deserialiser` for a `SerialisableStruct` has the member function `get<Name>()` which gets a `Deserialiser` (or the deserialised value, for automatically deserialisable types) for a field by name.
+
+The deserialiser is also destructurable into its fields using structured bindings.
 
 ## Real-world Example
 

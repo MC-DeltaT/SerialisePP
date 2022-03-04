@@ -277,7 +277,7 @@ namespace serialpp {
     // Specialising to true enables automatic deserialisation of T when requesting a T from a deserialiser for a
     // compound type. If enabled, the deserialiser must have a `value()` member function.
     template<Serialisable T>
-    inline static constexpr bool AUTO_DESERIALISE = false;
+    static inline constexpr bool AUTO_DESERIALISE = false;
 
     // If AUTO_DESERIALISE<T> is true, then returns the deserialised value, otherwise returns deserialiser unchanged.
     template<Serialisable T>

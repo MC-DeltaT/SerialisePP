@@ -64,6 +64,11 @@ namespace serialpp::test {
         test_assert(deserialiser.get<"foo">() == 123'456'789u);
         test_assert(deserialiser.get<"my field">() == 30000);
         test_assert(deserialiser.get<"qux">() == 99'999'999'999ull);
+        auto const [a, foo, my_field, qux] = deserialiser;
+        test_assert(a == -100);
+        test_assert(foo == 123'456'789u);
+        test_assert(my_field == 30000);
+        test_assert(qux == 99'999'999'999ull);
     }
 
 }

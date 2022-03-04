@@ -104,22 +104,41 @@ namespace serialpp {
     struct FixedDataSize<T> : FieldsFixedDataSize<typename T::Fields> {};
 
 
-    template<class Fields, ConstantString N> requires IsFieldsList<Fields>::value
-    [[nodiscard]]
-    consteval std::size_t field_offset() noexcept {
-        static_assert(!std::same_as<Fields, TypeList<>>, "No field with the specified name");
-        if constexpr (Fields::Head::NAME == N) {
-            return 0;
+    namespace impl {
+
+        template<class Fields, ConstantString N> requires IsFieldsList<Fields>::value
+        [[nodiscard]]
+        consteval std::size_t named_field_offset() noexcept {
+            static_assert(!std::same_as<Fields, TypeList<>>, "No field with the specified name");
+            if constexpr (Fields::Head::NAME == N) {
+                return 0;
+            }
+            else {
+                return FIXED_DATA_SIZE<typename Fields::Head::Type> + named_field_offset<typename Fields::Tail, N>();
+            }
         }
-        else {
-            return FIXED_DATA_SIZE<typename Fields::Head::Type> + field_offset<typename Fields::Tail, N>();
-        }
+
+
+        template<class Fields, std::size_t I> requires IsFieldsList<Fields>::value && (I < Fields::SIZE)
+        struct IndexedFieldOffset
+            : SizeTConstant<
+                FIXED_DATA_SIZE<typename Fields::Head::Type>
+                + IndexedFieldOffset<typename Fields::Tail, I - 1>::value> {};
+
+        template<class Fields>
+        struct IndexedFieldOffset<Fields, 0> : SizeTConstant<0> {};
+
     }
 
     // Gets the offset of a field from the beginning of the fixed data section.
     // If there is no field with the specified name, a compile error occurs.
     template<Struct S, ConstantString N> requires HasField<S, N>::value
-    static inline constexpr auto FIELD_OFFSET = field_offset<typename S::Fields, N>();
+    static inline constexpr auto NAMED_FIELD_OFFSET = impl::named_field_offset<typename S::Fields, N>();
+
+    // Gets the offset of a field from the beginning of the fixed data section.
+    // If I is out of bounds, a compile error occurs.
+    template<Struct S, std::size_t I> requires (I < S::Fields::SIZE)
+    static inline constexpr auto INDEXED_FIELD_OFFSET = impl::IndexedFieldOffset<typename S::Fields, I>::value;
 
 
     template<class... Fs> requires (IsField<Fs>::value && ...)
@@ -166,25 +185,53 @@ namespace serialpp {
     struct Serialiser<S> : FieldsSerialiser<typename S::Fields> {};
 
 
-    // TODO: make this destructurable?
     template<Struct S>
     class Deserialiser<S> : public DeserialiserBase<S> {
     public:
         using DeserialiserBase<S>::DeserialiserBase;
 
         // Gets a field by name.
-        template<ConstantString Name>
+        template<ConstantString Name> requires HasField<S, Name>::value
         [[nodiscard]]
         auto get() const {
-            constexpr auto offset = FIELD_OFFSET<S, Name>;
-            assert(offset <= this->_fixed_data.size());
+            constexpr auto offset = NAMED_FIELD_OFFSET<S, Name>;
             using FieldT = FieldType<S, Name>;
-            auto deserialiser = Deserialiser<FieldT>{
-                this->_fixed_data.subspan(offset, FIXED_DATA_SIZE<FieldT>),
+            return _get<offset, FieldT>();
+        }
+
+        // Gets a field by zero-based index.
+        template<std::size_t Index> requires (Index < S::Fields::SIZE)
+        [[nodiscard]]
+        auto get() const {
+            constexpr auto offset = INDEXED_FIELD_OFFSET<S, Index>;
+            using FieldT = TypeListElement<typename S::Fields, Index>::Type;
+            return _get<offset, FieldT>();
+        }
+
+    private:
+        template<std::size_t Offset, typename T>
+        [[nodiscard]]
+        auto _get() const {
+            assert(Offset <= this->_fixed_data.size());
+            auto deserialiser = Deserialiser<T>{
+                this->_fixed_data.subspan(Offset, FIXED_DATA_SIZE<T>),
                 this->_variable_data
             };
             return auto_deserialise(deserialiser);
         }
     };
+
+}
+
+
+namespace std {
+
+    template<serialpp::Struct S>
+    struct tuple_size<serialpp::Deserialiser<S>> : integral_constant<size_t, S::Fields::SIZE> {};
+
+
+    template<std::size_t I, serialpp::Struct S>
+    struct tuple_element<I, serialpp::Deserialiser<S>>
+        : type_identity<typename serialpp::TypeListElement<typename S::Fields, I>::Type> {};
 
 }

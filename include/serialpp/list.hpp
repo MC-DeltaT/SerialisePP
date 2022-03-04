@@ -36,7 +36,7 @@ namespace serialpp {
 
     using ListSizeType = std::uint16_t;
 
-    inline static constexpr std::size_t MAX_LIST_SIZE = std::numeric_limits<ListSizeType>::max();
+    static inline constexpr std::size_t MAX_LIST_SIZE = std::numeric_limits<ListSizeType>::max();
 
 
     // Safely casts to ListSizeType.

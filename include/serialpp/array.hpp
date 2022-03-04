@@ -50,7 +50,6 @@ namespace serialpp {
     };
 
 
-    // TODO: make this destructurable?
     template<Serialisable T, std::size_t N>
     class Deserialiser<Array<T, N>> : public DeserialiserBase<Array<T, N>> {
     public:
@@ -102,3 +101,14 @@ namespace serialpp {
 
 }
 
+
+namespace std {
+
+    template<serialpp::Serialisable T, std::size_t N>
+    struct tuple_size<serialpp::Deserialiser<serialpp::Array<T, N>>> : integral_constant<size_t, N> {};
+
+
+    template<std::size_t I, serialpp::Serialisable T, std::size_t N>
+    struct tuple_element<I, serialpp::Deserialiser<serialpp::Array<T, N>>> : type_identity<T> {};
+
+}
