@@ -293,7 +293,7 @@ namespace serialpp {
 
     // Gets the type resulting from performing automatic deserialisation.
     template<Serialisable T>
-    using AutoDeserialiseResult = decltype(auto_deserialise(std::declval<Deserialiser<T>>()));
+    using AutoDeserialiseResult = decltype(auto_deserialise(std::declval<Deserialiser<T> const>()));
 
 
     // Serialises an entire object.

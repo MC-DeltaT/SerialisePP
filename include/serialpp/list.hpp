@@ -304,7 +304,7 @@ namespace serialpp {
         [[nodiscard]]
         DataOffset _offset() const {
             return Deserialiser<DataOffset>{
-                this->_fixed_data.subspan(FIXED_DATA_SIZE<ListSizeType>),
+                this->_fixed_data.subspan(FIXED_DATA_SIZE<ListSizeType>, FIXED_DATA_SIZE<DataOffset>),
                 this->_variable_data
             }.value();
         }

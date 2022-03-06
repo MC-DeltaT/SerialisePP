@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <format>
 #include <ranges>
+#include <type_traits>
 
 #include "common.hpp"
 #include "utility.hpp"
@@ -109,6 +110,7 @@ namespace std {
 
 
     template<std::size_t I, serialpp::Serialisable T, std::size_t N>
-    struct tuple_element<I, serialpp::Deserialiser<serialpp::Array<T, N>>> : type_identity<T> {};
+    struct tuple_element<I, serialpp::Deserialiser<serialpp::Array<T, N>>>
+        : type_identity<serialpp::AutoDeserialiseResult<T>> {};
 
 }

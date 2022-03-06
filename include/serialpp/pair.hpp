@@ -95,9 +95,11 @@ namespace std {
 
 
     template<serialpp::Serialisable T1, serialpp::Serialisable T2>
-    struct tuple_element<0, serialpp::Deserialiser<serialpp::Pair<T1, T2>>> : type_identity<T1> {};
+    struct tuple_element<0, serialpp::Deserialiser<serialpp::Pair<T1, T2>>>
+        : type_identity<serialpp::AutoDeserialiseResult<T1>> {};
 
     template<serialpp::Serialisable T1, serialpp::Serialisable T2>
-    struct tuple_element<1, serialpp::Deserialiser<serialpp::Pair<T1, T2>>> : type_identity<T2> {};
+    struct tuple_element<1, serialpp::Deserialiser<serialpp::Pair<T1, T2>>>
+        : type_identity<serialpp::AutoDeserialiseResult<T2>> {};
 
 }

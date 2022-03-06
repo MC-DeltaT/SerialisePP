@@ -1,4 +1,6 @@
 #include <array>
+#include <cstddef>
+#include <cstdint>
 
 #include <serialpp/common.hpp>
 #include <serialpp/struct.hpp>
@@ -9,8 +11,6 @@
 
 
 namespace serialpp::test {
-
-    // TODO: testing with MockSerialisable?
 
     static_assert(FIXED_DATA_SIZE<BasicTestStruct> == 1 + 4 + 2 + 8);
 
@@ -29,7 +29,28 @@ namespace serialpp::test {
         test_assert(source.get<"qux">() == 9'876'543'210ull);
     }
 
-    STEST_CASE(Serialiser_Struct) {
+    STEST_CASE(Serialiser_Struct_Mock) {
+        SerialiseBuffer buffer;
+        auto const target = buffer.initialise<MockTestStruct>();
+        SerialiseSource<MockTestStruct> const source{};
+        Serialiser<MockTestStruct> const serialiser;
+        auto const new_target = serialiser(source, target);
+
+        SerialiseTarget const expected_new_target{buffer, 48, 48, 0, 48};
+        test_assert(new_target == expected_new_target);
+        test_assert(source.get<"magic">().targets.size() == 1);
+        test_assert(source.get<"magic">().targets.at(0) == SerialiseTarget{buffer, 48, 0, 20, 48});
+        test_assert(source.get<"foo">().targets.size() == 1);
+        test_assert(source.get<"foo">().targets.at(0) == SerialiseTarget{buffer, 48, 20, 10, 48});
+        test_assert(source.get<"field">().targets.size() == 1);
+        test_assert(source.get<"field">().targets.at(0) == SerialiseTarget{buffer, 48, 30, 5, 48});
+        test_assert(source.get<"qux">().targets.size() == 1);
+        test_assert(source.get<"qux">().targets.at(0) == SerialiseTarget{buffer, 48, 35, 11, 48});
+        test_assert(source.get<"anotherone">().targets.size() == 1);
+        test_assert(source.get<"anotherone">().targets.at(0) == SerialiseTarget{buffer, 48, 46, 2, 48});
+    }
+
+    STEST_CASE(Serialiser_Struct_Scalar) {
         SerialiseBuffer buffer;
         auto const target = buffer.initialise<BasicTestStruct>();
         SerialiseSource<BasicTestStruct> const source{
@@ -52,7 +73,26 @@ namespace serialpp::test {
         test_assert(buffer_equal(buffer, expected_buffer));
     }
 
-    STEST_CASE(Deserialiser_Struct) {
+    STEST_CASE(Deserialiser_Struct_Mock) {
+        std::array<std::byte, 100> const buffer{};
+        auto const deserialiser = deserialise<MockTestStruct>(buffer);
+        test_assert(bytes_view_same(deserialiser.get<"magic">()._fixed_data, ConstBytesView{buffer.data(), 20}));
+        test_assert(
+            bytes_view_same(deserialiser.get<"magic">()._variable_data, ConstBytesView{buffer.data() + 48, 52}));
+        test_assert(bytes_view_same(deserialiser.get<"foo">()._fixed_data, ConstBytesView{buffer.data() + 20, 10}));
+        test_assert(bytes_view_same(deserialiser.get<"foo">()._variable_data, ConstBytesView{buffer.data() + 48, 52}));
+        test_assert(bytes_view_same(deserialiser.get<"field">()._fixed_data, ConstBytesView{buffer.data() + 30, 5}));
+        test_assert(
+            bytes_view_same(deserialiser.get<"field">()._variable_data, ConstBytesView{buffer.data() + 48, 52}));
+        test_assert(bytes_view_same(deserialiser.get<"qux">()._fixed_data, ConstBytesView{buffer.data() + 35, 11}));
+        test_assert(bytes_view_same(deserialiser.get<"qux">()._variable_data, ConstBytesView{buffer.data() + 48, 52}));
+        test_assert(
+            bytes_view_same(deserialiser.get<"anotherone">()._fixed_data, ConstBytesView{buffer.data() + 46, 2}));
+        test_assert(
+            bytes_view_same(deserialiser.get<"anotherone">()._variable_data, ConstBytesView{buffer.data() + 48, 52}));
+    }
+
+    STEST_CASE(Deserialiser_Struct_Scalar) {
         std::array<unsigned char, 15> const buffer{
             0x9C,                   // a
             0x15, 0xCD, 0x5B, 0x07, // foo

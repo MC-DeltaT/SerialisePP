@@ -183,18 +183,11 @@ namespace serialpp::test {
     }
 
 
-    STEST_CASE(AutoDeserialise_Enabled) {
+    STEST_CASE(AutoDeserialise_Scalar) {
         std::array<unsigned char, 100> const buffer{0x01, 0x23, 0x45, 0x67, 0x11, 0x22, 0x33};
         auto const deserialiser = deserialise<std::uint32_t>(as_const_bytes_view(buffer));
         auto const value = auto_deserialise(deserialiser);
         test_assert(value == 1'732'584'193u);
-    }
-
-    STEST_CASE(AutoDeserialise_NotEnabled) {
-        std::array<std::byte, 100> const buffer{};
-        auto const deserialiser = deserialise<MockSerialisable<23>>(ConstBytesView{buffer});
-        auto const result = auto_deserialise(deserialiser);
-        test_assert(result == deserialiser);
     }
 
 }

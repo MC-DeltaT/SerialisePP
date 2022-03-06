@@ -13,8 +13,6 @@
 
 namespace serialpp::test {
 
-    // TODO: testing with MockSerialisable?
-
     static_assert(FIXED_DATA_SIZE<Variant<std::uint8_t, MockSerialisable<100>, std::int32_t>> == 3);
 
     STEST_CASE(Serialiser_Variant_Empty) {
@@ -33,7 +31,25 @@ namespace serialpp::test {
         test_assert(buffer_equal(buffer, expected_buffer));
     }
 
-    STEST_CASE(Serialiser_Variant_Nonempty) {
+    STEST_CASE(Serialiser_Variant_Nonempty_Mock) {
+        using Type = Variant<MockSerialisable<534>, MockSerialisable<87>, MockSerialisable<9066>, MockSerialisable<14>>;
+        SerialiseBuffer buffer;
+        buffer.extend(13);
+        for (unsigned i = 0; i < 10; ++i) {
+            buffer.span()[3 + i] = static_cast<std::byte>(i + 1);
+        }
+        SerialiseSource<Type> const source{std::in_place_index<3>};
+        SerialiseTarget const target{buffer, 3, 0, 3, 13};
+        Serialiser<Type> const serialiser;
+        auto const new_target = serialiser(source, target);
+
+        SerialiseTarget const expected_target{buffer, 3, 3, 0, 27};
+        test_assert(new_target == expected_target);
+        test_assert(std::get<3>(source).targets.size() == 1);
+        test_assert(std::get<3>(source).targets.at(0) == SerialiseTarget{buffer, 3, 13, 14, 27});
+    }
+
+    STEST_CASE(Serialiser_Variant_Nonempty_Scalar) {
         SerialiseBuffer buffer;
         buffer.extend(13);
         for (unsigned i = 0; i < 10; ++i) {
@@ -67,7 +83,20 @@ namespace serialpp::test {
         });
     }
 
-    STEST_CASE(Deserialiser_Variant_Nonempty) {
+    STEST_CASE(Deserialiser_Variant_Nonempty_Mock) {
+        std::array<unsigned char, 70> const buffer{
+            0x01,           // Type index
+            0x2A, 0x00,     // Offset
+        };
+        auto const buffer_view = as_const_bytes_view(buffer);
+        auto const deserialiser = deserialise<
+            Variant<MockSerialisable<10>, MockSerialisable<15>, MockSerialisable<24>>>(buffer_view);
+        test_assert(deserialiser.index() == 1);
+        test_assert(bytes_view_same(deserialiser.get<1>()._fixed_data, ConstBytesView{buffer_view.data() + 45, 15}));
+        test_assert(bytes_view_same(deserialiser.get<1>()._variable_data, ConstBytesView{buffer_view.data() + 3, 67}));
+    }
+
+    STEST_CASE(Deserialiser_Variant_Nonempty_Scalar) {
         std::array<unsigned char, 21> const buffer{
             0x02,           // Type index
             0x0A, 0x00,     // Value offset

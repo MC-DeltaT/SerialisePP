@@ -18,8 +18,6 @@
 
 namespace serialpp::test {
 
-    // TODO: testing with MockSerialisable?
-
     static_assert(FIXED_DATA_SIZE<List<std::int8_t>> == 2 + 2);
     static_assert(FIXED_DATA_SIZE<List<MockSerialisable<1000>>> == 2 + 2);
 
@@ -82,7 +80,11 @@ namespace serialpp::test {
         test_assert(buffer_equal(buffer, expected_buffer));
     }
 
-    STEST_CASE(Serialiser_List_Nonempty) {
+    STEST_CASE(Serialiser_List_Nonempty_Mock) {
+        // TODO: how to get data from SerialiseSource?
+    }
+
+    STEST_CASE(Serialiser_List_Nonempty_Scalar) {
         SerialiseBuffer buffer;
         buffer.extend(14);
         for (unsigned i = 0; i < 10; ++i) {
@@ -130,7 +132,25 @@ namespace serialpp::test {
         }
     }
 
-    STEST_CASE(Deserialiser_List_Nonempty) {
+    STEST_CASE(Deserialiser_List_Nonempty_Mock) {
+        std::array<unsigned char, 50> const buffer{
+            0x04, 0x00,     // Size
+            0x10, 0x00      // Offset
+        };
+        auto const buffer_view = as_const_bytes_view(buffer);
+        auto const deserialiser = deserialise<List<MockSerialisable<5>>>(buffer_view);
+        test_assert(deserialiser.size() == 4);
+        test_assert(bytes_view_same(deserialiser.at(0)._fixed_data, ConstBytesView{buffer_view.data() + 20, 5}));
+        test_assert(bytes_view_same(deserialiser.at(0)._variable_data, ConstBytesView{buffer_view.data() + 4, 46}));
+        test_assert(bytes_view_same(deserialiser.at(1)._fixed_data, ConstBytesView{buffer_view.data() + 25, 5}));
+        test_assert(bytes_view_same(deserialiser.at(1)._variable_data, ConstBytesView{buffer_view.data() + 4, 46}));
+        test_assert(bytes_view_same(deserialiser.at(2)._fixed_data, ConstBytesView{buffer_view.data() + 30, 5}));
+        test_assert(bytes_view_same(deserialiser.at(2)._variable_data, ConstBytesView{buffer_view.data() + 4, 46}));
+        test_assert(bytes_view_same(deserialiser.at(3)._fixed_data, ConstBytesView{buffer_view.data() + 35, 5}));
+        test_assert(bytes_view_same(deserialiser.at(3)._variable_data, ConstBytesView{buffer_view.data() + 4, 46}));
+    }
+
+    STEST_CASE(Deserialiser_List_Nonempty_Scalar) {
         std::array<unsigned char, 20> const buffer{
             0x05, 0x00,     // Size
             0x06, 0x00,     // Offset

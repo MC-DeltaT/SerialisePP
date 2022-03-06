@@ -109,11 +109,41 @@ namespace serialpp::test {
     static_assert(FIXED_DATA_SIZE<Variant<Variant<std::uint64_t, std::int16_t>>> == 3);
 
     STEST_CASE(Serialiser_VariantOfVariant) {
-        // TODO
+        using V1 = Variant<std::uint32_t, std::uint16_t>;
+        using V2 = Variant<std::uint8_t, std::int16_t, std::int32_t>;
+        using V3 = Variant<V1, V2>;
+        SerialiseBuffer buffer;
+        auto const target = buffer.initialise<V3>();
+        SerialiseSource<V3> const source{SerialiseSource<V2>{SerialiseSource<std::int32_t>{-123'456'789ll}}};
+        Serialiser<V3> const serialiser;
+        auto const new_target = serialiser(source, target);
+
+        SerialiseTarget const expected_new_target{buffer, 3, 3, 0, 10};
+        test_assert(new_target == expected_new_target);
+        std::array<unsigned char, 10> const expected_buffer{
+            0x01,                   // Outer variant type index
+            0x00, 0x00,             // Outer variant value offset
+            0x02,                   // Inner variant type index
+            0x03, 0x00,             // Inner variant value offset
+            0xEB, 0x32, 0xA4, 0xF8  // Inner variant value
+        };
+        test_assert(buffer_equal(buffer, expected_buffer));
     }
 
     STEST_CASE(Deserialiser_VariantOfVariant) {
-        // TODO
+        using Type = Variant<Variant<std::uint32_t, std::uint16_t>, Variant<std::uint8_t, std::int16_t, std::int32_t>>;
+        std::array<unsigned char, 10> const buffer{
+            0x01,                   // Outer variant type index
+            0x00, 0x00,             // Outer variant value offset
+            0x02,                   // Inner variant type index
+            0x03, 0x00,             // Inner variant value offset
+            0xEB, 0x32, 0xA4, 0xF8  // Inner variant value
+        };
+        auto const deserialiser = deserialise<Type>(as_const_bytes_view(buffer));
+        test_assert(deserialiser.index() == 1);
+        auto const inner = deserialiser.get<1>();
+        test_assert(inner.index() == 2);
+        test_assert(inner.get<2>() == -123'456'789ll);
     }
 
 
@@ -311,7 +341,7 @@ namespace serialpp::test {
 
         auto const pair = deserialiser.get<"pair_struct2_struct1">();
 
-        auto const struct2 = pair.first();
+        auto const [struct2, struct1] = pair;
 
         auto const struct2_struct1 = struct2.get<"struct1">();
         test_assert(std::ranges::equal(struct2_struct1.get<"list_u16">().elements(), std::array{48815, 28759, 46627}));
@@ -345,7 +375,6 @@ namespace serialpp::test {
         test_assert(struct2_array_struct1.at(1).get<"u8">() == 16);
         test_assert(!struct2_array_struct1.at(1).get<"opt_i64">().has_value());
 
-        auto const struct1 = pair.second();
         test_assert(
             std::ranges::equal(struct1.get<"list_u16">().elements(), std::array{10314, 5267, 56351, 11437, 38287}));
         test_assert(struct1.get<"u8">() == 44);

@@ -130,6 +130,7 @@ namespace serialpp {
 
     }
 
+
     // Gets the offset of a field from the beginning of the fixed data section.
     // If there is no field with the specified name, a compile error occurs.
     template<Struct S, ConstantString N> requires HasField<S, N>::value
@@ -209,7 +210,7 @@ namespace serialpp {
         }
 
     private:
-        template<std::size_t Offset, typename T>
+        template<std::size_t Offset, Serialisable T>
         [[nodiscard]]
         auto _get() const {
             assert(Offset <= this->_fixed_data.size());
@@ -232,6 +233,6 @@ namespace std {
 
     template<std::size_t I, serialpp::Struct S>
     struct tuple_element<I, serialpp::Deserialiser<S>>
-        : type_identity<typename serialpp::TypeListElement<typename S::Fields, I>::Type> {};
+        : type_identity<serialpp::AutoDeserialiseResult<typename serialpp::TypeListElement<typename S::Fields, I>::Type>> {};
 
 }

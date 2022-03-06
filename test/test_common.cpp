@@ -1,3 +1,4 @@
+#include <array>
 #include <cstddef>
 #include <cstdint>
 
@@ -83,7 +84,7 @@ namespace serialpp::test {
         test_assert(new_target == expected_new_target);
     }
 
-    STEST_CASE(SerialiseTarget_PushVariableField) {
+    STEST_CASE(SerialiseTarget_PushVariableFields) {
         SerialiseBuffer buffer;
         buffer.extend(45);
         SerialiseTarget const target{buffer, 30, 7, 13, 40};
@@ -153,16 +154,22 @@ namespace serialpp::test {
     }
 
 
+    STEST_CASE(AutoDeserialise_Disabled) {
+        std::array<std::byte, 100> const buffer{};
+        auto const deserialiser = deserialise<MockSerialisable<23>>(ConstBytesView{buffer});
+        auto const result = auto_deserialise(deserialiser);
+        test_assert(result == deserialiser);
+    }
+
+
     STEST_CASE(Serialise) {
         SerialiseBuffer buffer;
-        SerialiseSource<MockSerialisable<5>> const source{67543};
+        SerialiseSource<MockSerialisable<5>> const source;
         serialise(source, buffer);
 
-        auto const serialised_source = Serialiser<MockSerialisable<5>>::source;
-        test_assert(serialised_source == source);
-        auto const target = Serialiser<MockSerialisable<5>>::target;
+        test_assert(source.targets.size() == 1);
         SerialiseTarget const expected_target{buffer, 5, 0, 5, 5};
-        test_assert(target == expected_target);
+        test_assert(source.targets.at(0) == expected_target);
     }
 
 

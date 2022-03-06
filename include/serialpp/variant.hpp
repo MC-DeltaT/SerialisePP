@@ -127,7 +127,7 @@ namespace serialpp {
         [[nodiscard]]
         DataOffset _offset() const requires (sizeof...(Ts) > 0) {
             return Deserialiser<DataOffset>{
-                this->_fixed_data.subspan(FIXED_DATA_SIZE<VariantIndexType>),
+                this->_fixed_data.subspan(FIXED_DATA_SIZE<VariantIndexType>, FIXED_DATA_SIZE<DataOffset>),
                 this->_variable_data
             }.value();
         }
@@ -139,7 +139,7 @@ namespace serialpp {
             auto const offset = _offset();
             this->_check_variable_offset(offset);
             Deserialiser<T> const deserialiser{
-                this->_variable_data.subspan(offset),
+                this->_variable_data.subspan(offset, FIXED_DATA_SIZE<T>),
                 this->_variable_data
             };
             return auto_deserialise(deserialiser);

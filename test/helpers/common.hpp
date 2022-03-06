@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <optional>
 #include <span>
+#include <vector>
 
 #include <serialpp/common.hpp>
 #include <serialpp/utility.hpp>
@@ -24,7 +25,7 @@ namespace serialpp::test {
     }
 
 
-    // Checks if two ConstBytesView view the same location and size.
+    // Checks if two ConstBytesView view the same memory location and have the same size.
     [[nodiscard]]
     inline bool bytes_view_same(ConstBytesView v1, ConstBytesView v2) {
         return v1.data() == v2.data() && v1.size() == v2.size();
@@ -45,25 +46,17 @@ namespace serialpp {
     struct FixedDataSize<test::MockSerialisable<FixedSize>> : SizeTConstant<FixedSize> {};
 
     template<std::size_t FixedSize>
-    class SerialiseSource<test::MockSerialisable<FixedSize>> {
-    public:
-        int tag = 0;
-
-        [[nodiscard]]
-        friend constexpr auto operator<=>(SerialiseSource const&, SerialiseSource const&) = default;
+    struct SerialiseSource<test::MockSerialisable<FixedSize>> {
+        mutable std::vector<SerialiseTarget> targets;
     };
 
     template<std::size_t FixedSize>
     struct Serialiser<test::MockSerialisable<FixedSize>> {
-        SerialiseTarget operator()(SerialiseSource<test::MockSerialisable<FixedSize>> source,
+        SerialiseTarget operator()(SerialiseSource<test::MockSerialisable<FixedSize>> const& source,
                 SerialiseTarget target) const {
-            this->source = source;
-            this->target = target;
+            source.targets.push_back(target);
             return target;
         }
-
-        static inline SerialiseSource<test::MockSerialisable<FixedSize>> source;
-        static inline std::optional<SerialiseTarget> target;
     };
 
     template<std::size_t FixedSize>

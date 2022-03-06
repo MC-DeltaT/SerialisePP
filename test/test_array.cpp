@@ -14,8 +14,6 @@
 
 namespace serialpp::test {
 
-    // TODO: testing with MockSerialisable?
-
     static_assert(FIXED_DATA_SIZE<Array<std::int32_t, 17>> == 68);
     static_assert(FIXED_DATA_SIZE<Array<std::uint64_t, 0>> == 0);
 
@@ -32,7 +30,29 @@ namespace serialpp::test {
         test_assert(buffer_equal(buffer, expected_buffer));
     }
 
-    STEST_CASE(Serialiser_Array_Nonempty) {
+    STEST_CASE(Serialiser_Array_Nonempty_Mock) {
+        using Type = Array<MockSerialisable<6>, 5>;
+        SerialiseBuffer buffer;
+        auto const target = buffer.initialise<Type>();
+        SerialiseSource<Type> const source{};
+        Serialiser<Type> const serialiser;
+        auto const new_target = serialiser(source, target);
+
+        SerialiseTarget const expected_new_target{buffer, 30, 30, 0, 30};
+        test_assert(new_target == expected_new_target);
+        test_assert(source.elements[0].targets.size() == 1);
+        test_assert(source.elements[0].targets.at(0) == SerialiseTarget{buffer, 30, 0, 6, 30});
+        test_assert(source.elements[1].targets.size() == 1);
+        test_assert(source.elements[1].targets.at(0) == SerialiseTarget{buffer, 30, 6, 6, 30});
+        test_assert(source.elements[2].targets.size() == 1);
+        test_assert(source.elements[2].targets.at(0) == SerialiseTarget{buffer, 30, 12, 6, 30});
+        test_assert(source.elements[3].targets.size() == 1);
+        test_assert(source.elements[3].targets.at(0) == SerialiseTarget{buffer, 30, 18, 6, 30});
+        test_assert(source.elements[4].targets.size() == 1);
+        test_assert(source.elements[4].targets.at(0) == SerialiseTarget{buffer, 30, 24, 6, 30});
+    }
+
+    STEST_CASE(Serialiser_Array_Nonempty_Scalar) {
         SerialiseBuffer buffer;
         auto const target = buffer.initialise<Array<std::uint16_t, 5>>();
         SerialiseSource<Array<std::uint16_t, 5>> const source{12, 45, 465, 24643, 674};
@@ -63,7 +83,20 @@ namespace serialpp::test {
         }
     }
 
-    STEST_CASE(Deserialiser_Array_Nonempty) {
+    STEST_CASE(Deserialiser_Array_Nonempty_Mock) {
+        std::array<std::byte, 550> const buffer{};
+        auto const deserialiser = deserialise<Array<MockSerialisable<135>, 4>>(buffer);
+        test_assert(bytes_view_same(deserialiser.get<0>()._fixed_data, ConstBytesView{buffer.data(), 135}));
+        test_assert(bytes_view_same(deserialiser.get<0>()._variable_data, ConstBytesView{buffer.data() + 540, 10}));
+        test_assert(bytes_view_same(deserialiser.get<1>()._fixed_data, ConstBytesView{buffer.data() + 135, 135}));
+        test_assert(bytes_view_same(deserialiser.get<1>()._variable_data, ConstBytesView{buffer.data() + 540, 10}));
+        test_assert(bytes_view_same(deserialiser.get<2>()._fixed_data, ConstBytesView{buffer.data() + 270, 135}));
+        test_assert(bytes_view_same(deserialiser.get<2>()._variable_data, ConstBytesView{buffer.data() + 540, 10}));
+        test_assert(bytes_view_same(deserialiser.get<3>()._fixed_data, ConstBytesView{buffer.data() + 405, 135}));
+        test_assert(bytes_view_same(deserialiser.get<3>()._variable_data, ConstBytesView{buffer.data() + 540, 10}));
+    }
+
+    STEST_CASE(Deserialiser_Array_Nonempty_Scalar) {
         std::array<unsigned char, 12> const buffer{
             0xF0, 0x0E, 0xC3, 0x45,     // element 0
             0xC6, 0x4C, 0xD7, 0x9E,     // element 1
