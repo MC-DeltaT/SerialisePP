@@ -87,6 +87,7 @@ namespace serialpp {
     struct NamedTupleElement {
         using Type = T;
 
+        [[no_unique_address]]   // For Void
         T value;
 
         static inline constexpr ConstantString NAME = Name;
@@ -160,7 +161,7 @@ namespace serialpp {
 
 
     // Wrapper for a small value of any type (to avoid allocating on the heap), with support for visiting the value.
-    template<std::size_t MaxSize, std::size_t Align, typename Visitor>
+    template<std::size_t MaxSize, std::size_t Align, typename Visitor> requires (MaxSize >= 1) && (Align >= 1)
     class SmallAny {
     public:
         using VisitorType = Visitor;

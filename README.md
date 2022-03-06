@@ -24,7 +24,7 @@ But unlike Cap'n Proto and similar libraries, Serialise++ enables definition of 
  - On-the-fly serialisation and deserialisation - no data duplication!
  - Fully contained within C++ (no separate message/type definition, no code generation)
 
-(Support for more types is likely to come in the future, e.g. strings, void, tuples).
+(Support for more types is likely to come in the future, e.g. strings, tuples).
 
 ## Limitations
 

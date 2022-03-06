@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <format>
 #include <ranges>
+#include <tuple>
 #include <type_traits>
 
 #include "common.hpp"
@@ -29,6 +30,7 @@ namespace serialpp {
 
     template<Serialisable T, std::size_t N> requires (N > 0)
     struct SerialiseSource<Array<T, N>> {
+        [[no_unique_address]]   // For Void
         SerialiseSource<T> elements[N] = {};
     };
 

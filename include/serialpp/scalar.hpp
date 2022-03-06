@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <bit>
+#include <compare>
 #include <concepts>
 #include <cstddef>
 #include <cstdint>
@@ -15,6 +16,12 @@
 
 namespace serialpp {
 
+    // Serialisable type with no data and zero size.
+    struct Void {
+        friend constexpr auto operator<=>(Void, Void) noexcept = default;
+    };
+
+
     // To be supported, float must be 32-bit IEEE-754, and double must be 64-bit IEEE-754.
     template<typename T>
     concept Float = ((std::same_as<T, float> && sizeof(T) == 4) || (std::same_as<T, double> && sizeof(T) == 8))
@@ -23,12 +30,13 @@ namespace serialpp {
 
     // Fundamental type. Has no variable data.
     template<typename T>
-    concept Scalar = std::same_as<T, std::byte> || std::integral<T> || Float<T>;
+    concept Scalar = std::same_as<T, Void> || std::same_as<T, std::byte> || std::integral<T> || Float<T>;
 
 
     template<Scalar S>
     class SerialiseSource<S> {
     public:
+        [[no_unique_address]]   // For Void
         S value;
 
         constexpr SerialiseSource() noexcept :
@@ -56,6 +64,32 @@ namespace serialpp {
 
 
     // TODO: is it an issue that nonscalar serialisers adjust the fixed data offset, but scalar serialisers do not?
+
+
+    /*
+        Void:
+            Has an empty representation, i.e. 0 bytes.
+    */
+
+    template<>
+    struct FixedDataSize<Void> : SizeTConstant<0> {};
+
+    template<>
+    struct Serialiser<Void> {
+        SerialiseTarget operator()(SerialiseSource<Void>, SerialiseTarget target) const noexcept {
+            return target;
+        }
+    };
+
+    template<>
+    class Deserialiser<Void> : public DeserialiserBase<Void> {
+    public:
+        using DeserialiserBase<Void>::DeserialiserBase;
+
+        static constexpr Void value() noexcept {
+            return Void{};
+        }
+    };
 
 
     /*

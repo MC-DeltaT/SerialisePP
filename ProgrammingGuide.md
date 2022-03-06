@@ -85,13 +85,14 @@ Each type is specialised for `SerialiseSource`, `Serialiser`, and `Deserialiser`
 
 ### Scalars
 
-Scalars in Serialise++ are the basic C++ types. These currently include:
+Scalars in Serialise++ are the basic bread-and-butter types. These currently include:
 
  - Unsigned integers
  - Signed integers
  - `bool`
  - `std::byte`
  - `float` and `double` (supported only if they are IEEE-754 binary32 and binary64, respectively, and aren't mixed endian)
+ - `Void` (empty type, similar to `void`)
 
 `SerialiseSource` for a scalar is a transparent wrapper around the scalar itself, stored in the data member `value`.
 It's constructible from a scalar value and implicitly convertible to the scalar value.

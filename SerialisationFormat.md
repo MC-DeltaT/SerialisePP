@@ -49,6 +49,12 @@ Notice how object B.A is variable data, thus its subobject B.A.A is in the varia
 
 In general, there is no padding inserted between data. There is no concept of alignment within the bytes buffer.
 
+### `Void`
+
+Fixed data: none.
+
+Variable data: none.
+
 ### `std::byte`
 
 Fixed data: 1 byte, the value is represented as-is.

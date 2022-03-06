@@ -12,6 +12,7 @@
 
 namespace serialpp::test {
 
+    static_assert(Scalar<Void>);
     static_assert(Scalar<char>);
     static_assert(Scalar<unsigned char>);
     static_assert(Scalar<std::byte>);
@@ -28,6 +29,28 @@ namespace serialpp::test {
     static_assert(!Scalar<MockSerialisable<1>>);
     static_assert(!Scalar<std::string>);
     static_assert(!Scalar<long double>);
+
+
+    static_assert(FIXED_DATA_SIZE<Void> == 0);
+
+    STEST_CASE(Serialiser_Void) {
+        SerialiseBuffer buffer;
+        auto const target = buffer.initialise<Void>();
+        SerialiseSource<Void> const source{};
+        Serialiser<Void> const serialiser;
+        auto const new_target = serialiser(source, target);
+
+        SerialiseTarget const expected_new_target{buffer, 0, 0, 0, 0};
+        test_assert(new_target == expected_new_target);
+        std::array<unsigned char, 0> const expected_buffer{};
+        test_assert(buffer_equal(buffer, expected_buffer));
+    }
+
+    STEST_CASE(Deserialiser_Void) {
+        std::array<std::byte, 0> const buffer{};
+        auto const deserialiser = deserialise<Void>(buffer);
+        test_assert(deserialiser.value() == Void{});
+    }
 
 
     static_assert(FIXED_DATA_SIZE<std::byte> == 1);
