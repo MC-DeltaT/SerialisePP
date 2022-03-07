@@ -103,12 +103,12 @@ namespace serialpp {
             return Deserialiser<VariantIndexType>{this->_fixed_data, this->_variable_data}.value();
         }
 
-        // If I == index(), gets the contained value. Otherwise, throws std::bad_variant_access.
-        template<std::size_t I> requires (I < sizeof...(Ts))
+        // If Index == index(), gets the contained value. Otherwise, throws std::bad_variant_access.
+        template<std::size_t Index> requires (Index < sizeof...(Ts))
         [[nodiscard]]
         auto get() const {
-            if (I == index()) {
-                return _get<I>();
+            if (Index == index()) {
+                return _get<Index>();
             }
             else {
                 throw std::bad_variant_access{};
@@ -133,9 +133,9 @@ namespace serialpp {
         }
 
         // Gets the contained value by index.
-        template<std::size_t I> requires (I < sizeof...(Ts))
+        template<std::size_t Index> requires (Index < sizeof...(Ts))
         auto _get() const {
-            using T = TypeListElement<TypeList<Ts...>, I>;
+            using T = TypeListElement<TypeList<Ts...>, Index>;
             auto const offset = _offset();
             this->_check_variable_offset(offset);
             Deserialiser<T> const deserialiser{

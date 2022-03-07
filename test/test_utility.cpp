@@ -2,7 +2,6 @@
 #include <cstdint>
 #include <initializer_list>
 #include <optional>
-#include <string>
 #include <string_view>
 #include <typeinfo>
 #include <utility>
@@ -35,62 +34,6 @@ namespace serialpp::test {
         static_assert(s1 == s2);
         static_assert(!(s1 == s3));
         static_assert(!(s1 == s4));
-    }
-
-
-    STEST_CASE(NamedTuple_DefaultConstruct) {
-        NamedTuple<
-                NamedTupleElement<"foo", int>,
-                NamedTupleElement<"bar", char>,
-                NamedTupleElement<"qux", int>,
-                NamedTupleElement<"my_str", std::string>>
-            tuple{};
-
-        test_assert(tuple.get<"foo">() == 0);
-        test_assert(tuple.get<"bar">() == 0);
-        test_assert(tuple.get<"qux">() == 0);
-        test_assert(tuple.get<"my_str">() == std::string{});
-    }
-
-    STEST_CASE(NamedTuple_Get_Const) {
-        NamedTuple<
-                NamedTupleElement<"foo", int>,
-                NamedTupleElement<"bar", char>,
-                NamedTupleElement<"qux", int>,
-                NamedTupleElement<"my_str", std::string>>
-            const tuple{42, 'c', 56, "foo bar"};
-
-        test_assert(tuple.get<"foo">() == 42);
-        test_assert(tuple.get<"bar">() == 'c');
-        test_assert(tuple.get<"qux">() == 56);
-        test_assert(tuple.get<"my_str">() == std::string{"foo bar"});
-    }
-
-    STEST_CASE(NamedTuple_Get_Nonconst) {
-        NamedTuple<
-                NamedTupleElement<"foo", int>,
-                NamedTupleElement<"bar", char>,
-                NamedTupleElement<"qux", int>,
-                NamedTupleElement<"my_str", std::string>>
-            tuple{42, 'c', 56, "foo bar"};
-
-        tuple.get<"bar">() = 'h';
-        tuple.get<"my_str">() = "bar qux";
-
-        test_assert(tuple.get<"foo">() == 42);
-        test_assert(tuple.get<"bar">() == 'h');
-        test_assert(tuple.get<"qux">() == 56);
-        test_assert(tuple.get<"my_str">() == std::string{"bar qux"});
-    }
-
-    STEST_CASE(NamedTuple_Get_Nonexistent) {
-        using Tuple = NamedTuple<
-            NamedTupleElement<"foo", int>,
-            NamedTupleElement<"bar", char>,
-            NamedTupleElement<"qux", int>,
-            NamedTupleElement<"my_str", std::string>>;
-
-        static_assert(!CanGetNamedTuple<Tuple, "oh no">);
     }
 
 

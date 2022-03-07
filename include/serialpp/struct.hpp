@@ -27,14 +27,14 @@ namespace serialpp {
     struct Field {
         using Type = T;
 
-        static inline constexpr auto NAME = Name;
+        static constexpr auto NAME = Name;
     };
 
 
     template<typename T>
-    struct IsField : std::bool_constant<
-        requires { requires std::derived_from<T, Field<T::NAME, typename T::Type>>; }
-    > {};
+    static inline constexpr bool IS_FIELD = requires {
+        requires std::derived_from<T, Field<T::NAME, typename T::Type>>;
+    };
 
 
     // Base for compound structures that can contain arbitrary serialisable fields.
@@ -44,34 +44,56 @@ namespace serialpp {
     //     Field<"bar", Optional<std::uint64_t>>,
     //     Field<"qux", List<std::int8_t>>
     //  > {};
-    template<class... Fs> requires (IsField<Fs>::value && ...)
+    template<class... Fs> requires (IS_FIELD<Fs> && ...)
     struct SerialisableStruct : Fs... {
         using Fields = TypeList<Fs...>;
     };
 
 
     template<typename T>
-    struct IsFieldsList : std::false_type {};
+    static inline constexpr bool IS_FIELDS_LIST = false;
 
-    template<class... Ts> requires (IsField<Ts>::value && ...)
-    struct IsFieldsList<TypeList<Ts...>> : std::true_type {};
+    template<class... Ts>
+    static inline constexpr bool IS_FIELDS_LIST<TypeList<Ts...>> = (IS_FIELD<Ts> && ...);
 
 
-    namespace impl {
+    template<typename T, class Fields> requires IS_FIELDS_LIST<Fields>
+    static inline constexpr bool IS_DERIVED_FROM_SERIALISABLE_STRUCT = false;
 
-        template<typename T, class Fields> requires IsFieldsList<Fields>::value
-        struct IsDerivedFromSerialisableStruct : std::false_type {};
-
-        template<typename T, class... Fields> requires (IsField<Fields>::value && ...)
-        struct IsDerivedFromSerialisableStruct<T, TypeList<Fields...>>
-            : std::is_base_of<SerialisableStruct<Fields...>, T> {};
-
-    }
+    template<typename T, class... Fields> requires (IS_FIELD<Fields> && ...)
+    static inline constexpr bool IS_DERIVED_FROM_SERIALISABLE_STRUCT<T, TypeList<Fields...>> =
+        std::derived_from<T, SerialisableStruct<Fields...>> {};
 
 
     template<typename T>
     concept Struct =
-        IsFieldsList<typename T::Fields>::value && impl::IsDerivedFromSerialisableStruct<T, typename T::Fields>::value;
+        IS_FIELDS_LIST<typename T::Fields> && IS_DERIVED_FROM_SERIALISABLE_STRUCT<T, typename T::Fields>;
+
+
+    namespace impl {
+
+        template<class Fields, ConstantString Name> requires IS_FIELDS_LIST<Fields>
+        [[nodiscard]]
+        consteval bool contains_field() noexcept {
+            if constexpr (Fields::Head::NAME == Name) {
+                return true;
+            }
+            else {
+                return contains_field<typename Fields::Tail, Name>();
+            }
+        }
+
+    }
+
+
+    // Checks if a list of fields has a field with the specified name.
+    template<class Fields, ConstantString Name> requires IS_FIELDS_LIST<Fields>
+    static inline constexpr bool CONTAINS_FIELD = impl::contains_field<Fields, Name>();
+
+
+    // Checks if a SerialisableStruct has a field with the specified name.
+    template<Struct S, ConstantString Name>
+    static inline constexpr bool HAS_FIELD = impl::contains_field<typename S::Fields, Name>();
 
 
     namespace impl {
@@ -82,77 +104,114 @@ namespace serialpp {
     }
 
 
-    // Checks if a SerialisableStruct has a field with a specified name.
-    template<Struct S, ConstantString Name>
-    struct HasField : std::bool_constant<requires { impl::field_type<Name>(std::declval<S>()); }> {};
-
-
     // Gets the type of the SerialisableStruct field with the specified name.
     // If there is no such field, a compile error occurs.
     template<Struct S, ConstantString Name>
     using FieldType = decltype(impl::field_type<Name>(std::declval<S>()));
 
 
-    template<class Fields> requires IsFieldsList<Fields>::value
-    struct FieldsFixedDataSize
-        : SizeTConstant<FIXED_DATA_SIZE<typename Fields::Head::Type> + FieldsFixedDataSize<typename Fields::Tail>{}> {};
+    template<class Fields> requires IS_FIELDS_LIST<Fields>
+    static inline constexpr std::size_t FIELDS_FIXED_DATA_SIZE = 
+        FIXED_DATA_SIZE<typename Fields::Head::Type> + FIELDS_FIXED_DATA_SIZE<typename Fields::Tail>;
 
     template<>
-    struct FieldsFixedDataSize<TypeList<>> : SizeTConstant<0> {};
+    static inline constexpr std::size_t FIELDS_FIXED_DATA_SIZE<TypeList<>> = 0;
 
 
     template<Struct T>
-    struct FixedDataSize<T> : FieldsFixedDataSize<typename T::Fields> {};
+    struct FixedDataSize<T> : SizeTConstant<FIELDS_FIXED_DATA_SIZE<typename T::Fields>> {};
 
 
     namespace impl {
 
-        template<class Fields, ConstantString N> requires IsFieldsList<Fields>::value
+        template<class Fields, ConstantString Name> requires IS_FIELDS_LIST<Fields> && CONTAINS_FIELD<Fields, Name>
         [[nodiscard]]
         consteval std::size_t named_field_offset() noexcept {
             static_assert(!std::same_as<Fields, TypeList<>>, "No field with the specified name");
-            if constexpr (Fields::Head::NAME == N) {
+            if constexpr (Fields::Head::NAME == Name) {
                 return 0;
             }
             else {
-                return FIXED_DATA_SIZE<typename Fields::Head::Type> + named_field_offset<typename Fields::Tail, N>();
+                return FIXED_DATA_SIZE<typename Fields::Head::Type> + named_field_offset<typename Fields::Tail, Name>();
             }
         }
 
 
-        template<class Fields, std::size_t I> requires IsFieldsList<Fields>::value && (I < Fields::SIZE)
-        struct IndexedFieldOffset
-            : SizeTConstant<
-                FIXED_DATA_SIZE<typename Fields::Head::Type>
-                + IndexedFieldOffset<typename Fields::Tail, I - 1>::value> {};
+        template<class Fields, std::size_t Index> requires IS_FIELDS_LIST<Fields> && (Index < Fields::SIZE)
+        static inline constexpr std::size_t INDEXED_FIELD_OFFSET =
+            FIXED_DATA_SIZE<typename Fields::Head::Type> + INDEXED_FIELD_OFFSET<typename Fields::Tail, Index - 1>;
 
         template<class Fields>
-        struct IndexedFieldOffset<Fields, 0> : SizeTConstant<0> {};
+        static inline constexpr std::size_t INDEXED_FIELD_OFFSET<Fields, 0> = 0;
 
     }
 
 
     // Gets the offset of a field from the beginning of the fixed data section.
     // If there is no field with the specified name, a compile error occurs.
-    template<Struct S, ConstantString N> requires HasField<S, N>::value
-    static inline constexpr auto NAMED_FIELD_OFFSET = impl::named_field_offset<typename S::Fields, N>();
+    template<Struct S, ConstantString Name> requires HAS_FIELD<S, Name>
+    static inline constexpr auto NAMED_FIELD_OFFSET = impl::named_field_offset<typename S::Fields, Name>();
 
     // Gets the offset of a field from the beginning of the fixed data section.
-    // If I is out of bounds, a compile error occurs.
-    template<Struct S, std::size_t I> requires (I < S::Fields::SIZE)
-    static inline constexpr auto INDEXED_FIELD_OFFSET = impl::IndexedFieldOffset<typename S::Fields, I>::value;
+    // If Index is out of bounds, a compile error occurs.
+    template<Struct S, std::size_t Index> requires (Index < S::Fields::SIZE)
+    static inline constexpr auto INDEXED_FIELD_OFFSET = impl::INDEXED_FIELD_OFFSET<typename S::Fields, Index>;
 
 
-    template<class... Fs> requires (IsField<Fs>::value && ...)
-    using FieldsSerialiseSourceTuple = NamedTuple<NamedTupleElement<Fs::NAME, SerialiseSource<typename Fs::Type>>...>;
+    template<ConstantString Name, typename T>
+    struct StructSerialiseSourceElement {
+        using Type = T;
+
+        [[no_unique_address]]   // For Void
+        T value;
+
+        static constexpr ConstantString NAME = Name;
+    };
 
 
-    template<class Fields> requires IsFieldsList<Fields>::value
+    namespace impl {
+
+        template<ConstantString Name, typename T>
+        [[nodiscard]]
+        constexpr T& get(StructSerialiseSourceElement<Name, T>& source) noexcept {
+            return source.value;
+        }
+
+        template<ConstantString Name, typename T>
+        [[nodiscard]]
+        constexpr T const& get(StructSerialiseSourceElement<Name, T> const& source) noexcept {
+            return source.value;
+        }
+
+    }
+
+
+    template<class Fields> requires IS_FIELDS_LIST<Fields>
     struct FieldsSerialiseSource;
 
-    template<class... Fs> requires (IsField<Fs>::value && ...)
-    struct FieldsSerialiseSource<TypeList<Fs...>> : FieldsSerialiseSourceTuple<Fs...> {
-        using FieldsSerialiseSourceTuple<Fs...>::FieldsSerialiseSourceTuple;
+    // Inspired by "Beyond struct: Meta-programming a struct Replacement in C++20" by John Bandela: https://youtu.be/FXfrojjIo80
+    template<class... Fields> requires (IS_FIELD<Fields> && ...)
+    struct FieldsSerialiseSource<TypeList<Fields...>>
+            : StructSerialiseSourceElement<Fields::NAME, SerialiseSource<typename Fields::Type>>... {
+        constexpr FieldsSerialiseSource() = default;
+
+        constexpr FieldsSerialiseSource(SerialiseSource<typename Fields::Type>... elements) :
+            StructSerialiseSourceElement<Fields::NAME, SerialiseSource<typename Fields::Type>>{std::move(elements)}...
+        {}
+
+        // Gets a field by name.
+        template<ConstantString Name>
+        [[nodiscard]]
+        constexpr auto& get() noexcept requires CONTAINS_FIELD<TypeList<Fields...>, Name> {
+            return impl::get<Name>(*this);
+        }
+
+        // Gets a field by name.
+        template<ConstantString Name>
+        [[nodiscard]]
+        constexpr auto const& get() const noexcept requires CONTAINS_FIELD<TypeList<Fields...>, Name> {
+            return impl::get<Name>(*this);
+        }
     };
 
 
@@ -163,7 +222,7 @@ namespace serialpp {
     };
 
 
-    template<class Fields> requires IsFieldsList<Fields>::value
+    template<class Fields> requires IS_FIELDS_LIST<Fields>
     struct FieldsSerialiser {
         SerialiseTarget operator()(auto const& source, SerialiseTarget target) const {
             using Head = Fields::Head;
@@ -177,7 +236,7 @@ namespace serialpp {
 
     template<>
     struct FieldsSerialiser<TypeList<>> {
-        SerialiseTarget operator()(auto const& source, SerialiseTarget target) const {
+        SerialiseTarget operator()(auto const& source, SerialiseTarget target) const noexcept {
             return target;
         }
     };
@@ -193,7 +252,8 @@ namespace serialpp {
         using DeserialiserBase<S>::DeserialiserBase;
 
         // Gets a field by name.
-        template<ConstantString Name> requires HasField<S, Name>::value
+        // If there is no field with the specified name, a compile error occurs.
+        template<ConstantString Name> requires HAS_FIELD<S, Name>
         [[nodiscard]]
         auto get() const {
             constexpr auto offset = NAMED_FIELD_OFFSET<S, Name>;
@@ -202,6 +262,7 @@ namespace serialpp {
         }
 
         // Gets a field by zero-based index.
+        // If Index is out of bounds, a compile error occurs.
         template<std::size_t Index> requires (Index < S::Fields::SIZE)
         [[nodiscard]]
         auto get() const {
@@ -211,7 +272,7 @@ namespace serialpp {
         }
 
     private:
-        template<std::size_t Offset, Serialisable T>
+        template<std::size_t Offset, Serialisable T> requires (Offset + FIXED_DATA_SIZE<T> <= FIXED_DATA_SIZE<S>)
         [[nodiscard]]
         auto _get() const {
             assert(Offset <= this->_fixed_data.size());

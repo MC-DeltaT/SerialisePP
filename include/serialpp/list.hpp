@@ -170,8 +170,8 @@ namespace serialpp {
             SerialiseVisitorImpl const& visitor;
             std::optional<SerialiseVisitResult> result;     // Can't default construct SerialiseTarget
 
-            template<typename T>
-            void operator()(T&& range) {
+            template<typename R>
+            void operator()(R&& range) {
                 result = visitor(range);
             }
         };

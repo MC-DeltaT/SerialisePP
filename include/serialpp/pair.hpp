@@ -70,17 +70,17 @@ namespace serialpp {
         }
 
         // Gets an element by index.
-        template<std::size_t N> requires (N <= 1)
+        template<std::size_t Index> requires (Index <= 1)
         [[nodiscard]]
         auto get() const {
-            if constexpr (N == 0) {
+            if constexpr (Index == 0) {
                 return first();
             }
-            else if constexpr (N == 1) {
+            else if constexpr (Index == 1) {
                 return second();
             }
             else {
-                static_assert(N <= 1);
+                static_assert(Index <= 1);
             }
         }
     };

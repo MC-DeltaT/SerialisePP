@@ -212,7 +212,7 @@ Assume the variable data section already has 100 bytes of other data.
     0x73  : 0x03    # element 2 value
     0x74  : 0x04    # element 3 value
 
-### `Array<T, N>`
+### `Array<T, Size>`
 
 Fixed data: just the fixed data for all the elements, in the same order as in the `SerialiseSource`.
 

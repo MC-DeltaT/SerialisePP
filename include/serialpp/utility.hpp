@@ -41,8 +41,8 @@ namespace serialpp {
 
     namespace impl {
 
-        template<class TList, std::size_t I> requires (I < TList::SIZE)
-        struct TypeListElement : TypeListElement<typename TList::Tail, I - 1> {};
+        template<class TList, std::size_t Index> requires (Index < TList::SIZE)
+        struct TypeListElement : TypeListElement<typename TList::Tail, Index - 1> {};
 
         template<class TList>
         struct TypeListElement<TList, 0> : std::type_identity<typename TList::Head> {};
@@ -50,114 +50,37 @@ namespace serialpp {
     }
 
     // Gets the type at the specified index of a TypeList.
-    // If I is out of bounds, a compile error occurs.
-    template<class TList, std::size_t I> requires (I < TList::SIZE)
-    using TypeListElement = typename impl::TypeListElement<TList, I>::type;
+    // If Index is out of bounds, a compile error occurs.
+    template<class TList, std::size_t Index> requires (Index < TList::SIZE)
+    using TypeListElement = typename impl::TypeListElement<TList, Index>::type;
 
 
     // Fixed-length string for use as template arguments at compile time.
-    template<std::size_t N>
+    // From "Beyond struct: Meta-programming a struct Replacement in C++20" by John Bandela: https://youtu.be/FXfrojjIo80
+    template<std::size_t Size>
     struct ConstantString {
-        char data[N] = {};
+        char data[Size] = {};
 
-        constexpr ConstantString(char const (&str)[N + 1]) {
-            std::copy_n(str, N, data);
+        constexpr ConstantString(char const (&str)[Size + 1]) {
+            std::copy_n(str, Size, data);
         }
 
         [[nodiscard]]
         constexpr std::string_view string_view() const {
-            return {data, N};
+            return {data, Size};
         }
     };
 
     // Deduction guide to trim off null terminator from a string literal.
-    template<std::size_t N>
-    ConstantString(char const (&)[N]) -> ConstantString<N - 1>;
+    template<std::size_t Size>
+    ConstantString(char const (&)[Size]) -> ConstantString<Size - 1>;
 
 
-    template<std::size_t N1, std::size_t N2>
+    template<std::size_t Size1, std::size_t Size2>
     [[nodiscard]]
-    constexpr bool operator==(ConstantString<N1> const& lhs, ConstantString<N2> const& rhs) {
+    constexpr bool operator==(ConstantString<Size1> const& lhs, ConstantString<Size2> const& rhs) {
         return lhs.string_view() == rhs.string_view();
     }
-
-
-    // Element of a NamedTuple.
-    template<ConstantString Name, typename T>
-    struct NamedTupleElement {
-        using Type = T;
-
-        [[no_unique_address]]   // For Void
-        T value;
-
-        static inline constexpr ConstantString NAME = Name;
-    };
-
-
-    template<typename T>
-    struct IsNamedTupleElement : std::bool_constant<
-        requires { requires std::derived_from<T, NamedTupleElement<T::NAME, typename T::Type>>; }
-    > {};
-
-
-    namespace impl {
-
-        template<ConstantString Name, typename T>
-        [[nodiscard]]
-        constexpr T& get(NamedTupleElement<Name, T>& tuple) noexcept {
-            return tuple.value;
-        }
-
-        template<ConstantString Name, typename T>
-        [[nodiscard]]
-        constexpr T const& get(NamedTupleElement<Name, T> const& tuple) noexcept {
-            return tuple.value;
-        }
-
-    }
-
-
-    // Checks if a NamedTuple has an element with a specified name.
-    template<class Tuple, ConstantString Name>
-    struct HasElement : std::bool_constant<requires { impl::get<Name>(std::declval<Tuple>()); }> {};
-
-
-    namespace impl {
-
-        // Silly class needed for NamedTuple on MSVC, where a base class name (Es) will shadow a template parameter
-        // (pretty sure it's a bug).
-        template<typename T>
-        struct DeferredBase : T {};
-
-    }
-
-
-    // A tuple where each element is associated with a name given by a ConstantString.
-    // Inspired by "Beyond struct: Meta-programming a struct Replacement in C++20" by John Bandela: https://youtu.be/FXfrojjIo80
-    template<class... Es> requires (IsNamedTupleElement<Es>::value && ...)
-    struct NamedTuple : impl::DeferredBase<Es>...  {
-        using Elements = TypeList<Es...>;
-
-        constexpr NamedTuple() = default;
-
-        constexpr NamedTuple(typename Es::Type... elements) :
-            impl::DeferredBase<Es>{std::move(elements)}...
-        {}
-
-        // Gets an element by name.
-        template<ConstantString Name>
-        [[nodiscard]]
-        constexpr auto&& get() noexcept requires HasElement<NamedTuple, Name>::value {
-            return impl::get<Name>(*this);
-        }
-
-        // Gets an element by name.
-        template<ConstantString Name>
-        [[nodiscard]]
-        constexpr auto&& get() const noexcept requires HasElement<NamedTuple, Name>::value {
-            return impl::get<Name>(*this);
-        }
-    };
 
 
     // Wrapper for a small value of any type (to avoid allocating on the heap), with support for visiting the value.

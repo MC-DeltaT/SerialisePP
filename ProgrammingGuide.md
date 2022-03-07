@@ -103,23 +103,23 @@ All scalar types support automatic deserialisation.
 
 ### Array
 
-`Array<T, N>` is a type which contains an ordered sequence of exactly `N` elements of type `T`.
+`Array<T, Size>` is a type which contains an ordered sequence of exactly `Size` elements of type `T`.
 
-`SerialiseSource` for an `Array<T, N>` contains a data member `elements` of type `SerialiseSource<T>[N]` if `N > 0`, or nothing if `N == 0`.
+`SerialiseSource` for an `Array<T, Size>` contains a data member `elements` of type `SerialiseSource<T>[Size]` if `Size > 0`, or nothing if `Size == 0`.
 It can be initialised like an `std::array`:
 ```c++
 SerialiseSource<Array<long, 4>> const source{{1, 2, 3, 4}};
 ```
 
-`Deserialiser` for an `Array<T, N>` has the following member functions:
+`Deserialiser` for an `Array<T, Size>` has the following member functions:
 
- - `size()`: returns the number of elements (always `N`).
- - `operator[](index)`: returns a `Deserialiser<T>` (or deserialised value for automatically deserialisable `T`) for the element at the specified index. The index must be in the range `[0, N)`.
+ - `size()`: returns the number of elements (always `Size`).
+ - `operator[](index)`: returns a `Deserialiser<T>` (or deserialised value for automatically deserialisable `T`) for the element at the specified index. The index must be in the range `[0, Size)`.
  - `at(index)`: like `operator[]` but throws `std::out_of_range` if the index is out of bounds.
- - `get<I>()`: like `operator[]`, but checks the index at compile time.
+ - `get<Index>()`: like `operator[]`, but checks the index at compile time.
  - `elements()`: returns a view of that yields `Deserialiser<T>` (or deserialised value for automatically deserialisable `T`) for each element.
 
-The deserialiser is also destructurable into its `N` elements using structured bindings.
+The deserialiser is also destructurable into its `Size` elements using structured bindings.
 
 ### List
 
@@ -178,7 +178,7 @@ If `Ts` is empty, then a `std::variant<std::monostate>`, since `std::variant` ca
 `Deserialiser` for a `Variant<Ts...>` has the following member functions:
 
  - `index()`: returns the zero-based index of the contained type. (Only if `Ts` is not empty.)
- - `get<I>()`: gets a `Deserialiser` for the contained type (or deserialised value for automatically deserialisable types) if `I == index()`, otherwise throws `std::bad_variant_access`.
+ - `get<Index>()`: gets a `Deserialiser` for the contained type (or deserialised value for automatically deserialisable types) if `Index == index()`, otherwise throws `std::bad_variant_access`.
  - `visit(func)`: invokes a function with a `Deserialiser` for the contained type (or deserialised value for automatically deserialisable types) as the argument.
 
 ### Pair
@@ -191,7 +191,7 @@ If `Ts` is empty, then a `std::variant<std::monostate>`, since `std::variant` ca
 
  - `first()`: returns a `Deserialiser<T1>` (or deserialised value for automatically deserialisable `T1`).
  - `second()`: returns a `Deserialiser<T2>` (or deserialised value for automatically deserialisable `T2`).
- - `get<I>()`: returns `first()` for `I == 0`, and `second()` for `I == 1`.
+ - `get<Index>()`: returns `first()` for `Index == 0`, and `second()` for `Index == 1`.
 
 The deserialiser is also destructurable into its two elements using structured bindings.
 The first binding is to the result of `first()`, and the second binding is to the result of `second()`.

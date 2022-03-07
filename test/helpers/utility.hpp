@@ -2,7 +2,6 @@
 
 #include <compare>
 #include <concepts>
-#include <optional>
 #include <typeinfo>
 #include <utility>
 
@@ -10,13 +9,6 @@
 
 
 namespace serialpp::test {
-
-    // Needs to be a concept to test failure condition.
-    template<class Tuple, ConstantString N>
-    concept CanGetNamedTuple = requires (Tuple t) {
-        t.get<N>();
-    };
-
 
     struct LifecycleData {
         std::size_t constructs = 0;
