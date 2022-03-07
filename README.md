@@ -1,4 +1,4 @@
-# Serialise++: A simple and efficient serialisation library for C++
+# Serialise++: Simple and efficient serialisation for C++
 
 by Reece Jones
 
@@ -16,15 +16,16 @@ But unlike Cap'n Proto and similar libraries, Serialise++ enables definition of 
    - Booleans
    - Static arrays
    - Dynamic arrays
-   - Pair
-   - Optional
-   - Variant
+   - Pairs
+   - Tuples
+   - Optionals
+   - Variants
    - User-defined structs
  - Extensible serialisation for custom types
  - On-the-fly serialisation and deserialisation - no data duplication!
  - Fully contained within C++ (no separate message/type definition, no code generation)
 
-(Support for more types is likely to come in the future, e.g. strings, tuples).
+(Support for more types is likely to come in the future, e.g. strings).
 
 ## Limitations
 

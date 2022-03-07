@@ -196,6 +196,16 @@ If `Ts` is empty, then a `std::variant<std::monostate>`, since `std::variant` ca
 The deserialiser is also destructurable into its two elements using structured bindings.
 The first binding is to the result of `first()`, and the second binding is to the result of `second()`.
 
+### Tuple
+
+`Tuple<Ts...>` is a heterogeneous collection of any number (including zero) of types.
+
+`SerialiseSource` for a `Tuple<Ts...>` is simple an `std::tuple<SerialiseSource<Ts>...>`.
+
+`Deserialiser` for a `Tuple<Ts...>` has the member function `get<Index>()` which gets a `Deserialiser` (or the deserialised value, for automatically deserialisable types) for an element by index.
+
+The deserialiser is also destructurable into its elements using structured bindings.
+
 ### Structs
 
 Serialise++ supports user-defined structs via the `SerialisableStruct<Fields...>` class template.

@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <format>
 #include <ranges>
+#include <stdexcept>
 #include <tuple>
 #include <type_traits>
 
@@ -107,11 +108,11 @@ namespace serialpp {
 
 namespace std {
 
-    template<serialpp::Serialisable T, std::size_t Size>
+    template<serialpp::Serialisable T, size_t Size>
     struct tuple_size<serialpp::Deserialiser<serialpp::Array<T, Size>>> : integral_constant<size_t, Size> {};
 
 
-    template<std::size_t I, serialpp::Serialisable T, std::size_t Size>
+    template<size_t I, serialpp::Serialisable T, size_t Size>
     struct tuple_element<I, serialpp::Deserialiser<serialpp::Array<T, Size>>>
         : type_identity<serialpp::AutoDeserialiseResult<T>> {};
 

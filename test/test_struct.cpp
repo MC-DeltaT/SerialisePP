@@ -12,6 +12,8 @@
 
 namespace serialpp::test {
 
+    // TODO: empty struct
+
     static_assert(FIXED_DATA_SIZE<BasicTestStruct> == 1 + 4 + 2 + 8);
 
     STEST_CASE(SerialiseSource_Struct) {

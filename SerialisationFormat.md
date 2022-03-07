@@ -98,10 +98,10 @@ Example:
 `float` with the value 123456.
 
     offset: value
-    0x00  : 0x00
+    0x00  : 0x00    # least significant byte
     0x01  : 0x20
     0x02  : 0xF1
-    0x03  : 0x47
+    0x03  : 0x47    # most significant byte
 
 ### `Optional<T>`
 
@@ -259,6 +259,27 @@ Assume the variable data section already has 30 bytes of other data.
     0x23  : 0xD6
     0x24  : 0x12
     0x25  : 0x00
+
+### `Tuple<Ts...>`
+
+Fixed data: just the fixed data for all elements `Ts...`, in the same order as in the template argument list.
+
+Variable data: just the variable data for all elements `Ts...`, in the same order as in the template argument list.
+
+Example:  
+`Tuple<std::uint8_t, Optional<std::uint32_t>, std::uint8_t>` containing the values `{123, 456789, 87}`.  
+Assume the variable data section already has 55 bytes of other data.
+
+    offset: value
+    0x00  : 0x7B    # uint8_t 1
+    0x01  : 0x38    # optional value offset
+    0x02  : 0x00
+    0x03  : 0x57    # uint8_t 2
+    ...             # other variable data
+    0x3B  : 0x55    # optional value
+    0x3C  : 0xF8
+    0x3D  : 0x06
+    0x3E  : 0x00
 
 ### `SerialisableStruct<Fs...>`
 

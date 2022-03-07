@@ -156,51 +156,53 @@ namespace serialpp::test {
             {
                 {
                     {
-                        {{48815, 28759, 46627}},
-                        123,
-                        {}
+                        {
+                            {{48815, 28759, 46627}},
+                            123,
+                            {}
+                        },
+                        {{
+                            {{26676, 53866, 58316}},
+                            148,
+                            {}
+                        }},
+                        {{
+                            {
+                                {{19768}},
+                                61,
+                                {}
+                            },
+                            {
+                                {},
+                                20,
+                                -34'562'034'598'108'927ll
+                            }
+                        }},
+                        {{
+                            {
+                                {{20}},
+                                1,
+                                {-857923}
+                            },
+                            {
+                                {},
+                                16,
+                                {}
+                            }
+                        }}
                     },
-                    {{
-                        {{26676, 53866, 58316}},
-                        148,
-                        {}
-                    }},
-                    {{
-                        {
-                            {{19768}},
-                            61,
-                            {}
-                        },
-                        {
-                            {},
-                            20,
-                            -34'562'034'598'108'927ll
-                        }
-                    }},
-                    {{
-                        {
-                            {{20}},
-                            1,
-                            {-857923}
-                        },
-                        {
-                            {},
-                            16,
-                            {}
-                        }
-                    }}
+                    {
+                        {{10314, 5267, 56351, 11437, 38287}},
+                        44,
+                        1'685'439'465'438'748ll
+                    }
                 },
                 {
-                    {{10314, 5267, 56351, 11437, 38287}},
-                    44,
-                    1'685'439'465'438'748ll
-                }
-            },
-            {
-                SerialiseSource<CompoundTestStruct1>{
-                    std::array{1000, 2000, 3000, 4000},
-                    67,
-                    -65'473'985'456ll
+                    SerialiseSource<CompoundTestStruct1>{
+                        std::array{1000, 2000, 3000, 4000},
+                        67,
+                        -65'473'985'456ll
+                    }
                 }
             }
         };
@@ -339,7 +341,9 @@ namespace serialpp::test {
         };
         auto const deserialiser = deserialise<CompoundTestStruct3>(as_const_bytes_view(buffer));
 
-        auto const pair = deserialiser.get<"pair_struct2_struct1">();
+        auto const tuple = deserialiser.get<"tuple">();
+
+        auto const [pair, var] = tuple;
 
         auto const [struct2, struct1] = pair;
 
@@ -381,7 +385,6 @@ namespace serialpp::test {
         test_assert(struct1.get<"opt_i64">().has_value());
         test_assert(struct1.get<"opt_i64">().value() == 1'685'439'465'438'748ll);
 
-        auto const var = deserialiser.get<"var_struct1_struct2">();
         test_assert(var.index() == 1);
         auto const var_struct1 = var.get<1>();
         test_assert(std::ranges::equal(var_struct1.get<"list_u16">().elements(), std::array{1000, 2000, 3000, 4000}));

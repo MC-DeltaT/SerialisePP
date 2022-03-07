@@ -147,12 +147,12 @@ namespace serialpp {
     }
 
 
-    // Gets the offset of a field from the beginning of the fixed data section.
+    // Gets the offset of a SerialisableStruct field from the beginning of the fixed data section.
     // If there is no field with the specified name, a compile error occurs.
     template<Struct S, ConstantString Name> requires HAS_FIELD<S, Name>
     static inline constexpr auto NAMED_FIELD_OFFSET = impl::named_field_offset<typename S::Fields, Name>();
 
-    // Gets the offset of a field from the beginning of the fixed data section.
+    // Gets the offset of a SerialisableStruct field from the beginning of the fixed data section.
     // If Index is out of bounds, a compile error occurs.
     template<Struct S, std::size_t Index> requires (Index < S::Fields::SIZE)
     static inline constexpr auto INDEXED_FIELD_OFFSET = impl::INDEXED_FIELD_OFFSET<typename S::Fields, Index>;
@@ -187,15 +187,17 @@ namespace serialpp {
 
 
     template<class Fields> requires IS_FIELDS_LIST<Fields>
-    struct FieldsSerialiseSource;
+    class FieldsSerialiseSource;
 
     // Inspired by "Beyond struct: Meta-programming a struct Replacement in C++20" by John Bandela: https://youtu.be/FXfrojjIo80
     template<class... Fields> requires (IS_FIELD<Fields> && ...)
-    struct FieldsSerialiseSource<TypeList<Fields...>>
+    class FieldsSerialiseSource<TypeList<Fields...>>
             : StructSerialiseSourceElement<Fields::NAME, SerialiseSource<typename Fields::Type>>... {
+    public:
         constexpr FieldsSerialiseSource() = default;
 
-        constexpr FieldsSerialiseSource(SerialiseSource<typename Fields::Type>... elements) :
+        constexpr FieldsSerialiseSource(SerialiseSource<typename Fields::Type>&&... elements)
+                requires (sizeof...(Fields) > 0) :
             StructSerialiseSourceElement<Fields::NAME, SerialiseSource<typename Fields::Type>>{std::move(elements)}...
         {}
 
@@ -222,28 +224,29 @@ namespace serialpp {
     };
 
 
-    template<class Fields> requires IS_FIELDS_LIST<Fields>
-    struct FieldsSerialiser {
-        SerialiseTarget operator()(auto const& source, SerialiseTarget target) const {
-            using Head = Fields::Head;
-            using HeadType = typename Head::Type;
-            target = target.push_fixed_field<HeadType>([&source](SerialiseTarget field_target) {
-                return Serialiser<HeadType>{}(source.get<Head::NAME>(), field_target);
-            });
-            return FieldsSerialiser<typename Fields::Tail>{}(source, target);
-        }
-    };
-
-    template<>
-    struct FieldsSerialiser<TypeList<>> {
-        SerialiseTarget operator()(auto const& source, SerialiseTarget target) const noexcept {
-            return target;
-        }
-    };
-
-
     template<Struct S>
-    struct Serialiser<S> : FieldsSerialiser<typename S::Fields> {};
+    struct Serialiser<S> {
+        SerialiseTarget operator()(SerialiseSource<S> const& source, SerialiseTarget target) const {
+            return _serialise<typename S::Fields>(source, target);
+        }
+
+    private:
+        template<class Fields> requires IS_FIELDS_LIST<Fields>
+        [[nodiscard]]
+        SerialiseTarget _serialise(SerialiseSource<S> const& source, SerialiseTarget target) const {
+            if constexpr (Fields::SIZE > 0) {
+                using Head = Fields::Head;
+                using HeadType = typename Head::Type;
+                target = target.push_fixed_field<HeadType>([&source](SerialiseTarget field_target) {
+                    return Serialiser<HeadType>{}(source.get<Head::NAME>(), field_target);
+                });
+                return _serialise<typename Fields::Tail>(source, target);
+            }
+            else {
+                return target;
+            }
+        }
+    };
 
 
     template<Struct S>
@@ -293,7 +296,7 @@ namespace std {
     struct tuple_size<serialpp::Deserialiser<S>> : integral_constant<size_t, S::Fields::SIZE> {};
 
 
-    template<std::size_t I, serialpp::Struct S>
+    template<size_t I, serialpp::Struct S>
     struct tuple_element<I, serialpp::Deserialiser<S>>
         : type_identity<serialpp::AutoDeserialiseResult<typename serialpp::TypeListElement<typename S::Fields, I>::Type>> {};
 

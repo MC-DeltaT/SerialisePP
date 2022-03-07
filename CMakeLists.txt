@@ -16,6 +16,7 @@ add_executable(SerialisePPTest
     test/test_pair.cpp
     test/test_scalar.cpp
     test/test_struct.cpp
+    test/test_tuple.cpp
     test/test_utility.cpp
     test/test_variant.cpp
 )

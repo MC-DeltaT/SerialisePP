@@ -27,7 +27,8 @@ namespace serialpp {
 
 
     template<Serialisable T1, Serialisable T2>
-    struct SerialiseSource<Pair<T1, T2>> : std::pair<SerialiseSource<T1>, SerialiseSource<T2>> {
+    class SerialiseSource<Pair<T1, T2>> : public std::pair<SerialiseSource<T1>, SerialiseSource<T2>> {
+    public:
         using std::pair<SerialiseSource<T1>, SerialiseSource<T2>>::pair;
     };
 

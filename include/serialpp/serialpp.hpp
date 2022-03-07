@@ -7,4 +7,5 @@
 #include "pair.hpp"
 #include "scalar.hpp"
 #include "struct.hpp"
+#include "tuple.hpp"
 #include "variant.hpp"
