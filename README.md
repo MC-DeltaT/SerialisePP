@@ -16,7 +16,6 @@ But unlike Cap'n Proto and similar libraries, Serialise++ enables definition of 
    - Booleans
    - Static arrays
    - Dynamic arrays
-   - Pairs
    - Tuples
    - Optionals
    - Variants

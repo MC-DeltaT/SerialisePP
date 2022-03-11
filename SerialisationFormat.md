@@ -63,13 +63,14 @@ Variable data: none.
 
 ### Integers
 
-Includes the standard C++ integral types, including `char`s, except `bool`.
+Includes the standard C++ integral types, except `bool`.
 
 Fixed data: the integer is represented in two's complement, with little-endian byte order. The number of bytes of an integer type `I` is exactly `sizeof(I)` (since C++20 requires two's complement).
 
 Variable data: none.
 
-Note that the values of character literals encoded in `char` types will depend on the character set used by the compiler (which I believe is implementation-defined until C++23).
+Note that the values of character literals encoded in `char` types will depend on the character set used by the compiler, which is largely implementation-defined.
+As a result, it is your responsibility to ensure consistent encodings when serialising and deserialising character data with Serialise++.
 
 Example:  
 `std::int32_t` with the value -1'234'567.  
