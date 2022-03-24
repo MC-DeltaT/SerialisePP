@@ -68,9 +68,9 @@ namespace serialpp::test {
                 any1{std::in_place_type<ValueType>, lifecycle, 13};
             test_assert(lifecycle == LifecycleData{.constructs = 1});
             decltype(any1) any2{std::move(any1)};
-            test_assert(lifecycle == LifecycleData{.constructs = 1});
+            test_assert(lifecycle == LifecycleData{.constructs = 1, .move_constructs = 1});
             decltype(any2) const any3{std::move(any2)};
-            test_assert(lifecycle == LifecycleData{.constructs = 1});
+            test_assert(lifecycle == LifecycleData{.constructs = 1, .move_constructs = 2});
 
             MockSmallAnyVisitor<ValueType> visitor;
             any3.visit(visitor);
@@ -78,7 +78,7 @@ namespace serialpp::test {
             test_assert(visitor.value->value.has_value());
             test_assert(visitor.value->value.value() == 13);
         }
-        test_assert(lifecycle == LifecycleData{.constructs = 1, .destructs = 1});
+        test_assert(lifecycle == LifecycleData{.constructs = 1, .destructs = 1, .move_constructs = 2});
     }
 
     STEST_CASE(SmallAny_MoveConstruct2) {

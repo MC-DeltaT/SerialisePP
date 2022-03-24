@@ -92,10 +92,10 @@ namespace serialpp {
         static constexpr std::size_t MAX_SIZE = MaxSize;
         static constexpr std::size_t ALIGN = Align;
 
-        // Checks if this type can contain a particular type (i.e. satisfies size and alignment requirements).
+        // Checks if this type can contain a particular type.
         template<typename T>
         static constexpr bool can_contain() noexcept {
-            return sizeof(T) <= MaxSize && alignof(T) <= Align;
+            return sizeof(T) <= MaxSize && alignof(T) <= Align && std::move_constructible<T>;
         }
 
         template<typename T, typename... Args> requires (can_contain<T>()) && std::constructible_from<T, Args...>
@@ -115,15 +115,19 @@ namespace serialpp {
         }
 
         ~SmallAny() {
-            _destruct();
+            if (_visitor_func) {
+                _visitor_func(_data, VisitOperation::DESTRUCT, nullptr);
+            }
         }
 
         SmallAny(SmallAny&& other) noexcept :
-            _visitor_func{std::exchange(other._visitor_func, nullptr)}
+            _visitor_func{other._visitor_func}
         {
-            // No need to move data if other was empty.
-            if (_visitor_func) {
-                std::memcpy(_data, other._data, sizeof(_data));
+            if (other._visitor_func) {
+                other._visitor_func(other._data, VisitOperation::MOVE_CONSTRUCT, _data);
+
+                // Do this last so we get strong exception guarantee.
+                other._visitor_func = nullptr;
             }
         }
 
@@ -134,27 +138,32 @@ namespace serialpp {
 
         void visit(Visitor& visitor) const {
             assert(_visitor_func);
-            _visitor_func(_data, true, &visitor);
+            _visitor_func(_data, VisitOperation::VISIT, &visitor);
         }
 
     private:
-        alignas(Align) std::byte _data[MaxSize];
-        void (*_visitor_func)(void const*, bool, Visitor*);
+        enum class VisitOperation : unsigned char {
+            DESTRUCT, MOVE_CONSTRUCT, VISIT
+        };
 
-        void _destruct() noexcept {
-            if (_visitor_func) {
-                _visitor_func(_data, false, nullptr);
-            }
-        }
+        alignas(Align) std::byte _data[MaxSize];
+        void (*_visitor_func)(void const*, VisitOperation, void*);
 
         template<typename T>
-        static void _generic_visitor_func(void const* data, bool operation, Visitor* visitor) {
-            auto const p = static_cast<T const*>(data);
-            if (operation) {
-                (*visitor)(*p);
-            }
-            else {
-                p->~T();
+        static void _generic_visitor_func(void const* data, VisitOperation operation, void* arg) {
+            switch (operation) {
+            case VisitOperation::DESTRUCT:
+                static_cast<T const*>(data)->~T();
+                break;
+            case VisitOperation::MOVE_CONSTRUCT:
+                // Will be inside the move constructor, thus data will always be nonconst.
+                new (arg) T{std::move(*static_cast<T*>(const_cast<void*>(data)))};
+                break;
+            case VisitOperation::VISIT:
+                std::invoke(*static_cast<Visitor*>(arg), *static_cast<T const*>(data));
+                break;
+            default:
+                break;
             }
         }
     };
