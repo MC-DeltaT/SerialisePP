@@ -10,8 +10,8 @@
 namespace serialpp {
 
     /*
-        Optional:
-            Fixed data is an offset (DataOffset) that indicates both if there is a contained value, and the variable
+        optional:
+            Fixed data is an offset (data_offset_t) that indicates both if there is a contained value, and the variable
             offset of the value (if present).
             If the offset is 0, then there is no value and no variable data is present.
             If the offset is > 0, then the value starts at byte [offset - 1] of the variable data section.
@@ -19,74 +19,82 @@ namespace serialpp {
 
 
     // Serialisable type which contains either zero or one instance of a type.
-    template<Serialisable T>
-    struct Optional {};
+    template<serialisable T>
+    struct optional {};
 
 
-    template<Serialisable T>
-    struct FixedDataSize<Optional<T>> : FixedDataSize<DataOffset> {};
+    template<serialisable T>
+    struct fixed_data_size<optional<T>> : fixed_data_size<data_offset_t> {};
 
 
-    template<Serialisable T>
-    class SerialiseSource<Optional<T>> : public std::optional<SerialiseSource<T>> {
+    template<serialisable T>
+    class serialise_source<optional<T>> : public std::optional<serialise_source<T>> {
     public:
-        using std::optional<SerialiseSource<T>>::optional;
+        using std::optional<serialise_source<T>>::optional;
     };
 
 
-    template<Serialisable T>
-    struct Serialiser<Optional<T>> {
-        SerialiseTarget operator()(SerialiseSource<Optional<T>> const& source, SerialiseTarget target) const {
+    template<serialisable T>
+    struct serialiser<optional<T>> {
+        template<serialise_buffer Buffer>
+        constexpr serialise_target<Buffer> operator()(serialise_source<optional<T>> const& source,
+                serialise_target<Buffer> target) const {
             if (source.has_value()) {
-                auto const relative_variable_offset = target.relative_field_variable_offset();
-                return target.push_fixed_field<DataOffset>([relative_variable_offset](SerialiseTarget offset_target) {
-                    auto const offset = to_data_offset(relative_variable_offset + 1);
-                    return Serialiser<DataOffset>{}(offset, offset_target);
-                }).push_variable_fields<T>(1, [&source](SerialiseTarget variable_target) {
-                    return variable_target.push_fixed_field<T>([&source](SerialiseTarget value_target) {
-                        return Serialiser<T>{}(source.value(), value_target);
+                auto const relative_variable_offset = target.relative_subobject_variable_offset();
+                return target.push_fixed_subobject<data_offset_t>([relative_variable_offset](auto offset_target) {
+                    auto const offset = detail::to_data_offset(relative_variable_offset + 1);
+                    return serialiser<data_offset_t>{}(offset, offset_target);
+                }).push_variable_subobjects<T>(1, [&source](auto variable_target) {
+                    return variable_target.push_fixed_subobject<T>([&source](auto value_target) {
+                        return serialiser<T>{}(source.value(), value_target);
                     });
                 });
             }
             else {
-                return target.push_fixed_field<DataOffset>([](SerialiseTarget target) {
-                    return Serialiser<DataOffset>{}(0, target);
+                return target.push_fixed_subobject<data_offset_t>([](auto target) {
+                    return serialiser<data_offset_t>{}(0, target);
                 });
             }
         }
     };
 
 
-    template<Serialisable T>
-    class Deserialiser<Optional<T>> : public DeserialiserBase<Optional<T>> {
+    template<serialisable T>
+    class deserialiser<optional<T>> : public deserialiser_base {
     public:
-        using DeserialiserBase<Optional<T>>::DeserialiserBase;
+        using deserialiser_base::deserialiser_base;
 
-        // Checks if the Optional contains a value.
+        constexpr deserialiser(const_bytes_span fixed_data, const_bytes_span variable_data) :
+            deserialiser_base{no_fixed_buffer_check, fixed_data, variable_data}
+        {
+            check_fixed_buffer_size<optional<T>>(_fixed_data);
+        }
+
+        // Checks if the optional contains a value.
         [[nodiscard]]
-        bool has_value() const {
+        constexpr bool has_value() const {
             // Note: does not check if the offset is valid.
             return _value_offset() > 0;
         }
 
         // Gets the contained value. has_value() must be true.
         [[nodiscard]]
-        auto operator*() const {
+        constexpr auto_deserialise_t<T> operator*() const {
             auto offset = _value_offset();
             assert(offset > 0);
             offset -= 1;
-            this->_check_variable_offset(offset);
-            Deserialiser<T> const deserialiser{
-                this->_variable_data.subspan(offset, FIXED_DATA_SIZE<T>),
-                this->_variable_data
+            _check_variable_offset(offset);
+            deserialiser<T> const deser{
+                _variable_data.subspan(offset, fixed_data_size_v<T>),
+                _variable_data
             };
 
-            return auto_deserialise(deserialiser);
+            return auto_deserialise(deser);
         }
 
         // Gets the contained value. If has_value() is false, throws std::bad_optional_access.
         [[nodiscard]]
-        auto value() const {
+        constexpr auto_deserialise_t<T> value() const {
             if (has_value()) {
                 return **this;
             }
@@ -99,8 +107,8 @@ namespace serialpp {
         // Offset from start of variable data section to contained value, plus 1.
         // 0 indicates no contained value, i.e. empty optional.
         [[nodiscard]]
-        DataOffset _value_offset() const {
-            return Deserialiser<DataOffset>{this->_fixed_data, this->_variable_data}.value();
+        constexpr data_offset_t _value_offset() const {
+            return deserialiser<data_offset_t>{no_fixed_buffer_check, _fixed_data, _variable_data}.value();
         }
     };
 

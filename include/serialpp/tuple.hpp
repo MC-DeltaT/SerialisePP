@@ -11,39 +11,42 @@
 namespace serialpp {
 
     /*
-        Tuple:
+        tuple:
             Represented as the result of contiguously serialising each element of the tuple.
     */
 
 
     // Serialisable heterogeneous collection of any number of types.
-    template<Serialisable... Ts>
-    struct Tuple {
-        using Elements = TypeList<Ts...>;
+    template<serialisable... Ts>
+    struct tuple {
+        using element_types = type_list<Ts...>;
     };
 
 
-    template<Serialisable... Ts>
-    struct FixedDataSize<Tuple<Ts...>> : SizeTConstant<(FIXED_DATA_SIZE<Ts> + ...)> {};
+    template<serialisable... Ts>
+    struct fixed_data_size<tuple<Ts...>> : detail::size_t_constant<(fixed_data_size_v<Ts> + ...)> {};
 
     template<>
-    struct FixedDataSize<Tuple<>> : SizeTConstant<0> {};    // Can't fold empty pack over +
+    struct fixed_data_size<tuple<>> : detail::size_t_constant<0> {};    // Can't fold empty pack over +
 
 
-    template<Serialisable... Ts>
-    class SerialiseSource<Tuple<Ts...>> : public std::tuple<SerialiseSource<Ts>...> {
+    template<serialisable... Ts>
+    class serialise_source<tuple<Ts...>> : public std::tuple<serialise_source<Ts>...> {
     public:
-        using std::tuple<SerialiseSource<Ts>...>::tuple;
+        using std::tuple<serialise_source<Ts>...>::tuple;
 
-        constexpr SerialiseSource(SerialiseSource<Ts>&&... elements) :  // For some reason std::tuple doesn't have this
-            std::tuple<SerialiseSource<Ts>...>{std::move(elements)...}
+        // For some reason std::tuple doesn't have this constructor.
+        constexpr serialise_source(serialise_source<Ts>&&... elements) :
+            std::tuple<serialise_source<Ts>...>{std::move(elements)...}
         {}
     };
 
 
-    template<Serialisable... Ts>
-    struct Serialiser<Tuple<Ts...>> {
-        SerialiseTarget operator()(SerialiseSource<Tuple<Ts...>> const& source, SerialiseTarget target) const {
+    template<serialisable... Ts>
+    struct serialiser<tuple<Ts...>> {
+        template<serialise_buffer Buffer>
+        constexpr serialise_target<Buffer> operator()(serialise_source<tuple<Ts...>> const& source,
+                serialise_target<Buffer> target) const {
             if constexpr (sizeof...(Ts) > 0) {
                 return _serialise<0>(source, target);
             }
@@ -51,14 +54,15 @@ namespace serialpp {
                 return target;
             }
         }
-    
+
     private:
-        template<std::size_t Index> requires (Index < sizeof...(Ts))
+        template<std::size_t Index, serialise_buffer Buffer> requires (Index < sizeof...(Ts))
         [[nodiscard]]
-        static SerialiseTarget _serialise(SerialiseSource<Tuple<Ts...>> const& source, SerialiseTarget target) {
-            using ElementType = TypeListElement<TypeList<Ts...>, Index>;
-            target = target.push_fixed_field<ElementType>([&source](SerialiseTarget element_target) {
-                return Serialiser<ElementType>{}(std::get<Index>(source), element_target);
+        static constexpr serialise_target<Buffer> _serialise(serialise_source<tuple<Ts...>> const& source,
+                serialise_target<Buffer> target) {
+            using element_type = detail::type_list_element<type_list<Ts...>, Index>::type;
+            target = target.push_fixed_subobject<element_type>([&source](auto element_target) {
+                return serialiser<element_type>{}(std::get<Index>(source), element_target);
             });
 
             if constexpr (Index + 1 < sizeof...(Ts)) {
@@ -71,38 +75,42 @@ namespace serialpp {
     };
 
 
-    namespace impl {
+    namespace detail {
 
-        template<class Elements, std::size_t Index> requires (Index < Elements::SIZE)
-        static inline constexpr std::size_t ELEMENT_OFFSET =
-            FIXED_DATA_SIZE<typename Elements::Head> + ELEMENT_OFFSET<typename Elements::Tail, Index - 1>;
+        // Gets the offset of a tuple element from the beginning of the fixed data section.
+        // If Index is out of bounds, a compile error occurs.
+        template<class Elements, std::size_t Index> requires (Index < Elements::size)
+        static inline constexpr std::size_t tuple_element_offset =
+            fixed_data_size_v<typename Elements::head> + tuple_element_offset<typename Elements::tail, Index - 1>;
 
         template<class Elements>
-        static inline constexpr std::size_t ELEMENT_OFFSET<Elements, 0> = 0;
+        static inline constexpr std::size_t tuple_element_offset<Elements, 0> = 0;
 
     }
 
-    // Gets the offset of a Tuple element from the beginning of the fixed data section.
-    // If Index is out of bounds, a compile error occurs.
-    template<class Tuple, std::size_t Index> requires (Index < Tuple::Elements::SIZE)
-    static inline constexpr auto ELEMENT_OFFSET = impl::ELEMENT_OFFSET<typename Tuple::Elements, Index>;
 
-
-    template<Serialisable... Ts>
-    class Deserialiser<Tuple<Ts...>> : public DeserialiserBase<Tuple<Ts...>> {
+    template<serialisable... Ts>
+    class deserialiser<tuple<Ts...>> : public deserialiser_base {
     public:
-        using DeserialiserBase<Tuple<Ts...>>::DeserialiserBase;
+        using deserialiser_base::deserialiser_base;
+
+        constexpr deserialiser(const_bytes_span fixed_data, const_bytes_span variable_data) :
+            deserialiser_base{no_fixed_buffer_check, fixed_data, variable_data}
+        {
+            check_fixed_buffer_size<tuple<Ts...>>(_fixed_data);
+        }
 
         template<std::size_t Index> requires (Index < sizeof...(Ts))
         [[nodiscard]]
-        auto get() const {
-            constexpr auto offset = ELEMENT_OFFSET<Tuple<Ts...>, Index>;
-            using ElementType = TypeListElement<TypeList<Ts...>, Index>;
-            Deserialiser<ElementType> const deserialiser{
-                this->_fixed_data.subspan(offset, FIXED_DATA_SIZE<ElementType>),
-                this->_variable_data
+        constexpr auto get() const {
+            constexpr auto offset = detail::tuple_element_offset<type_list<Ts...>, Index>;
+            using element_type = detail::type_list_element<type_list<Ts...>, Index>::type;
+            deserialiser<element_type> const deser{
+                no_fixed_buffer_check,
+                _fixed_data.subspan(offset, fixed_data_size_v<element_type>),
+                _variable_data
             };
-            return auto_deserialise(deserialiser);
+            return auto_deserialise(deser);
         }
     };
 
@@ -111,12 +119,17 @@ namespace serialpp {
 
 namespace std {
 
-    template<serialpp::Serialisable... Ts>
-    struct tuple_size<serialpp::Deserialiser<serialpp::Tuple<Ts...>>> : integral_constant<size_t, sizeof...(Ts)> {};
+    // Structured binding support.
 
 
-    template<size_t I, serialpp::Serialisable... Ts>
-    struct tuple_element<I, serialpp::Deserialiser<serialpp::Tuple<Ts...>>>
-        : type_identity<serialpp::AutoDeserialiseResult<serialpp::TypeListElement<serialpp::TypeList<Ts...>, I>>> {};
+    template<::serialpp::serialisable... Ts>
+    struct tuple_size<::serialpp::deserialiser<::serialpp::tuple<Ts...>>> : integral_constant<size_t, sizeof...(Ts)> {};
+
+
+    template<size_t I, ::serialpp::serialisable... Ts>
+    struct tuple_element<I, ::serialpp::deserialiser<::serialpp::tuple<Ts...>>>
+        : type_identity<
+            ::serialpp::auto_deserialise_t<
+                typename ::serialpp::detail::type_list_element<::serialpp::type_list<Ts...>, I>::type>> {};
 
 }

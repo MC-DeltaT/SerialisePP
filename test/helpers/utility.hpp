@@ -1,8 +1,8 @@
 #pragma once
 
-#include <compare>
 #include <concepts>
 #include <typeinfo>
+#include <type_traits>
 #include <utility>
 
 #include <serialpp/utility.hpp>
@@ -10,7 +10,7 @@
 
 namespace serialpp::test {
 
-    struct LifecycleData {
+    struct lifecycle_data {
         std::size_t constructs = 0;
         std::size_t destructs = 0;
         std::size_t move_constructs = 0;
@@ -19,67 +19,71 @@ namespace serialpp::test {
         std::size_t copy_assigns = 0;
 
         [[nodiscard]]
-        friend constexpr auto operator<=>(LifecycleData const&, LifecycleData const&) = default;
+        friend constexpr bool operator==(lifecycle_data const&, lifecycle_data const&) noexcept = default;
     };
 
 
     template<std::regular T>
-    class LifecycleObserver {
+    class lifecycle_observer {
     public:
         T value;
 
         template<typename... Args> requires std::constructible_from<T, Args...>
-        explicit(sizeof...(Args) == 0) LifecycleObserver(LifecycleData& lifecycle, Args&&... args) :
+        constexpr lifecycle_observer(lifecycle_data& lifecycle, Args&&... args)
+                noexcept(std::is_nothrow_constructible_v<T, Args...>) :
            _lifecycle{&lifecycle}, value{std::forward<Args>(args)...}
         {
             ++_lifecycle->constructs;
         }
 
-        LifecycleObserver(LifecycleObserver&& other) noexcept :
+        constexpr lifecycle_observer(lifecycle_observer&& other) noexcept(std::is_nothrow_move_constructible_v<T>) :
             _lifecycle{other._lifecycle}, value{std::move(other.value)}
         {
             ++_lifecycle->move_constructs;
         }
 
-        LifecycleObserver(LifecycleObserver const& other) :
+        constexpr lifecycle_observer(lifecycle_observer const& other)
+                noexcept(std::is_nothrow_copy_constructible_v<T>) :
             _lifecycle{other._lifecycle}, value{other.value}
         {
             ++_lifecycle->copy_constructs;
         }
 
-        ~LifecycleObserver() {
+        constexpr ~lifecycle_observer() {
             ++_lifecycle->destructs;
         }
 
-        LifecycleObserver& operator=(LifecycleObserver&& other) noexcept {
+        constexpr lifecycle_observer& operator=(lifecycle_observer&& other)
+                noexcept(std::is_nothrow_move_assignable_v<T>) {
             // Assume _lifecycle == other._lifecycle
             ++_lifecycle->move_assigns;
             value = std::move(other.value);
             return *this;
         }
 
-        LifecycleObserver& operator=(LifecycleObserver const& other) {
+        constexpr lifecycle_observer& operator=(lifecycle_observer const& other)
+                noexcept(std::is_nothrow_copy_assignable_v<T>) {
             // Assume _lifecycle == other._lifecycle
             ++_lifecycle->copy_assigns;
             value = other.value;
             return *this;
         }
 
-        operator T&() noexcept {
+        constexpr operator T&() noexcept {
             return value;
         }
 
-        operator T const&() const noexcept {
+        constexpr operator T const&() const noexcept {
             return value;
         }
 
     private:
-        LifecycleData* _lifecycle;
+        lifecycle_data* _lifecycle;
     };
 
 
     template<typename T>
-    struct MockSmallAnyVisitor {
+    struct mock_small_any_visitor {
         T const* value = nullptr;
         std::type_info const* type = nullptr;
 

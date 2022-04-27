@@ -4,16 +4,17 @@
 
 Include `serialpp/serialpp.hpp` to pull in all functionality.
 
-All Serialise++ code entities live in the `serialpp` namespace. The `serialpp::` namespace specifier is omitted in this guide for brevity.
+All Serialise++ code entities live in the `serialpp` namespace.
+The `serialpp::` namespace specifier is omitted in many places in this guide for brevity.
 
 ## Serialisation Basics
 
 The serialisation process is, conceptually, a function which maps C++ values (input) to raw bytes (output).  
 In Serialise++, the code entities associated with this process are:
 
- - `SerialiseSource<T>` - contains the C++ values.
+ - `serialise_source<T>` - contains the C++ values.
  - `serialise<T>()` - performs the serialisation.
- - `SerialiseBuffer` - storage for the raw bytes.
+ - `basic_serialise_buffer<Allocator>` - storage for the raw bytes.
 
 Here, `T` is the type we are interested in serialising.
 
@@ -21,34 +22,34 @@ Let's take a look at an example of serialising a `std::uint64_t`:
 
 ```c++
 // Set up what value we want to serialise.
-SerialiseSource<std::uint64_t> const source{42};
-// Declare storage for the serialised bytes.
-SerialiseBuffer buffer;
+serialpp::serialise_source<std::uint64_t> const source{42};
+// Declare storage for the serialised bytes. Allocator defaults to std::allocator.
+serialpp::basic_serialise_buffer buffer;
 // Perform the serialisation.
-serialise(source, buffer);
-// Get a view of the resulting bytes. ConstBytesView is just an alias to std::span<std::byte const>
-ConstBytesView bytes_view = buffer.span();
+serialpp::serialise(source, buffer);
+// Get a view of the resulting bytes. const_bytes_span is just an alias to std::span<std::byte const>.
+serialpp::const_bytes_span bytes_view = buffer.span();
 ```
 
 That's it! `buffer`'s contents now contain the bytes representation of a `std::uint64_t` with value 42.
 We obtain a view of those bytes by using `buffer.span()`.
 
 Even with more complex types, the process is the same.
-`SerialiseSource<T>` holds the value to be serialised, `serialise<T>()` does the serialisation, and `SerialiseBuffer` holds the result.
+`serialise_source<T>` holds the value to be serialised, `serialise<T>()` does the serialisation, and `basic_serialise_buffer` holds the result.
 
-One important thing to note is that `SerialiseSource<T>` need not *store* the value to be serialised.
-It may instead store some form of generator for the value (e.g. a lazily-evaluated range, for the `List` type).
+One important thing to note is that `serialise_source<T>` need not store the complete value to be serialised.
+It may instead store some form of generator for the value (e.g. a lazily-evaluated range, for the `dynamic_array` type).
 This enables serialisation without excessive copying of data.
 
-(You may be wondering why `SerialiseBuffer` exists - why not just return, say, a `std::vector<std::byte>` from `serialise()`? The reason is performance. Memory allocations are slow and we'd like to avoid them.)
+(You may be wondering why `basic_serialise_buffer` exists - why not just return, say, a `std::vector<std::byte>` from `serialise()`? The reason is performance. Memory allocations are slow and we'd like to avoid them.)
 
 ## Deserialisation Basics
 
 The deserialisation process is similar to the serialisation process, but in reverse.
 The Serialise++ code entities associated with it are:
 
- - `Deserialiser<T>` - obtains C++ values from a buffer of bytes.
- - `deserialise<T>()` - builds a `Deserialiser<T>` from a view of bytes.
+ - `deserialiser<T>` - obtains C++ values from a buffer of bytes.
+ - `deserialise<T>()` - builds a `deserialiser<T>` from a view of bytes.
 
 Again, `T` is the type we want to deserialise (note that you must know this in advance, Serialise++ does not provide any built-in way to query what type is held by a bytes buffer).
 
@@ -56,32 +57,32 @@ Example code for deserialising a `std::uint64_t`:
 
 ```c++
 // The buffer with the bytes representation.
-ConstBytesView bytes = ...;
+serialpp::const_bytes_span bytes = ...;
 // Obtain a deserialiser object.
-Deserialiser<std::uint64_t> const deserialiser = deserialise<std::uint64_t>(bytes);
+serialpp::deserialiser<std::uint64_t> const deser = serialpp::deserialise<std::uint64_t>(bytes);
 // Perform the deserialisation.
-std::uint64_t const value = deserialiser.value();
+std::uint64_t const value = deser.value();
 ```
 
-It's important to note that the deserialisation didn't occur until the call to `deserialiser.value()`.
-This on-the-fly deserialisation avoids copying the entire value into a large C++ object, and then copying again what you need from that object.
+It's important to note that the deserialisation didn't occur until the call to `deser.value()`.
+This on-the-fly deserialisation is significant for large types, where it avoids copying a large value into a single large C++ object, and then copying again what you need from that object.
 
-Also note that the behaviour of `Deserialiser<T>` is dependent on `T`.
+Also note that the functionality of `deserialiser<T>` dependends on `T`.
 Different types have different member functions for deserialisation.
-Particularly, `Deserialiser` for compound types can produce more `Deserialiser` instances for the contained data.
+Particularly, `deserialiser` for compound types can produce more `deserialiser` instances for the contained data.
 
 ## Automatic Deserialisation
 
 Certain basic types, such as integers, support "automatic deserialisation" in many contexts within Serialise++, for ease of use.
-If a compound type `C` contains an automatically deserialisable type `A`, then `Deserialiser<C>` won't give you a `Deserialiser<A>`, it will just give you the value of `A` already deserialised.
+If a compound type `C` contains an automatically deserialisable type `A`, then `deserialiser<C>` won't give you a `deserialiser<A>`, it will just give you the value of `A` already deserialised.
 
-Automatic deserialisation is enabled with the `AUTO_DESERIALISE<T>` variable template.  
-The associated deserialised value type is given by `AutoDeserialiseResult<T>`.
+Automatic deserialisation is enabled with the `enable_auto_deserialise<T>` variable template.  
+The associated deserialised value type is given by `auto_deserialise_t<T>`.
 
 ## Type Support
 
 Serialise++ provides types to support more complex data.
-Each type is specialised for `SerialiseSource`, `Serialiser`, and `Deserialiser` to provide the required functionality.
+Each type is specialised for `serialise_source`, `serialiser`, and `deserialiser` to provide the required functionality.
 
 ### Scalars
 
@@ -91,173 +92,187 @@ Scalars in Serialise++ are the basic bread-and-butter types. These currently inc
  - Signed integers
  - `bool`
  - `std::byte`
- - `float` and `double` (supported only if they are IEEE-754 binary32 and binary64, respectively, and aren't mixed endian)
- - `Void` (empty type, similar to `void`)
+ - `float` and `double` (supported only if they are IEEE-754 binary32 and binary64, respectively)
+ - `null` (empty type, similar to `void`)
 
-`SerialiseSource` for a scalar is a transparent wrapper around the scalar itself, stored in the data member `value`.
+`serialise_source` for a scalar is a transparent wrapper around the scalar itself, stored in the data member `value`.
 It's constructible from a scalar value and implicitly convertible to the scalar value.
 
-`Deserialiser` for a scalar provides a member function `value()` which deserialises and returns the scalar value.
+`deserialiser` for a scalar provides a member function `value()` which deserialises and returns the scalar value.
 
 All scalar types support automatic deserialisation.
 
-### Array
+### static_array
 
-`Array<T, Size>` is a type which contains an ordered sequence of exactly `Size` elements of type `T`.
+`static_array<T, Size>` is a type which contains an ordered sequence of exactly `Size` elements of type `T`.
 
-`SerialiseSource` for an `Array<T, Size>` contains a data member `elements` of type `SerialiseSource<T>[Size]` if `Size > 0`, or nothing if `Size == 0`.
+`serialise_source` for an `static_array<T, Size>` contains a data member `elements` of type `serialise_source<T>[Size]` if `Size > 0`, or nothing if `Size == 0`.
 It can be initialised like an `std::array`:
 ```c++
-SerialiseSource<Array<long, 4>> const source{{1, 2, 3, 4}};
+serialise_source<static_array<long, 4>> const source{{1, 2, 3, 4}};
 ```
 
-`Deserialiser` for an `Array<T, Size>` has the following member functions:
+`deserialiser` for an `static_array<T, Size>` has the following member functions:
 
  - `size()`: returns the number of elements (always `Size`).
- - `operator[](index)`: returns a `Deserialiser<T>` (or deserialised value for automatically deserialisable `T`) for the element at the specified index. The index must be in the range `[0, Size)`.
+ - `operator[](index)`: returns a `deserialiser<T>` (or deserialised value for automatically deserialisable `T`) for the element at the specified index. The index must be in the range `[0, Size)`.
  - `at(index)`: like `operator[]` but throws `std::out_of_range` if the index is out of bounds.
  - `get<Index>()`: like `operator[]`, but checks the index at compile time.
- - `elements()`: returns a view of that yields `Deserialiser<T>` (or deserialised value for automatically deserialisable `T`) for each element.
+ - `elements()`: returns a view of that yields `deserialiser<T>` (or deserialised value for automatically deserialisable `T`) for each element.
 
 The deserialiser is also destructurable into its `Size` elements using structured bindings.
 
-### List
+### dynamic_array
 
-`List<T>` is a type which contains a variable-size ordered sequence of `T`.
+`dynamic_array<T>` is a type which contains a variable-size ordered sequence of `T`.
 
-`SerialiseSource` for a `List<T>` wraps a C++20 range whose elements are convertible to `SerialiseSource<T>`.
+`serialise_source` for a `dynamic_array<T>` wraps a C++20 range whose elements are convertible to `serialise_source<T>`.
 It may be constructed as follows:
 
 ```c++
 // Default construct to contain no elements:
-SerialiseSource<List<long>> const source;
+serialise_source<dynamic_array<long>> const source;
 
-// Construct from a braced initialiser of SerialiseSource<T>:
-SerialiseSource<List<long>> const source{{1, 2, 3}};
+// Construct from a braced initialiser of serialise_source<T>:
+serialise_source<dynamic_array<long>> const source{{1, 2, 3}};
 
 // Construct to view (not own) a range:
 std::vector<int> vec{1, 2, 3};
-SerialiseSource<List<long>> const source{vec};
+serialise_source<dynamic_array<long>> const source{vec};
 
 // Construct to own (by moving) a range:
 std::vector<int> vec{1, 2, 3};
-SerialiseSource<List<long>> const source{std::move(vec)};
+serialise_source<dynamic_array<long>> const source{std::move(vec)};
 
 // Construct to own a view:
 auto const v = std::ranges::views::iota(1, 4);
-SerialiseSource<List<long>> const source{v};
+serialise_source<dynamic_array<long>> const source{v};
 ```
 
-`Deserialiser` for a `List<T>` has the following member functions:
+`deserialiser` for a `dynamic_array<T>` has the following member functions:
 
  - `size()`: returns the number of elements.
  - `empty()`: returns `true` if there are zero elements, `false` otherwise.
- - `operator[](index)`: returns a `Deserialiser<T>` (or deserialised value for automatically deserialisable `T`) for an element at the specified index. The index must be in the range `[0, size())`.
+ - `operator[](index)`: returns a `deserialiser<T>` (or deserialised value for automatically deserialisable `T`) for an element at the specified index. The index must be in the range `[0, size())`.
  - `at(index)`: like `operator[]` but throws `std::out_of_range` if the index is out of bounds.
- - `elements()`: returns a view of that yields `Deserialiser<T>` (or deserialised value for automatically deserialisable `T`) for each element.
+ - `elements()`: returns a view of that yields `deserialiser<T>` (or deserialised value for automatically deserialisable `T`) for each element.
 
-### Optional
+### optional
 
-`Optional<T>` is a type which may contain zero or one instances of `T`.
+`optional<T>` is a type which may contain zero or one instances of `T`.
 
-`SerialiseSource` for an `Optional<T>` is simply an `std::optional` for a `SerialiseSource<T>`.
+`serialise_source` for an `optional<T>` is simply an `std::optional` for a `serialise_source<T>`.
 
-`Deserialiser` for an `Optional<T>` has the following member functions:
+`deserialiser` for an `optional<T>` has the following member functions:
 
  - `has_value()`: returns `true` if an instance of `T` is contained, otherwise it returns `false`.
- - `operator*()`: returns a `Deserialiser<T>` (or deserialised value for automatically deserialisable `T`). May only be called if `has_value() == true`.
+ - `operator*()`: returns a `deserialiser<T>` (or deserialised value for automatically deserialisable `T`). May only be called if `has_value() == true`.
  - `value()`: like `operator*`, but throws `std::bad_optional_access` if `has_value() == false`.
 
-### Variant
+### variant
 
-`Variant<Ts...>` is a type which contains an instance of any type in `Ts`. `Ts` may be empty.
+`variant<Ts...>` is a type which contains an instance of any type in `Ts`. `Ts` may be empty.
 
-`SerialiseSource` for a `Variant<Ts...>` is simply a `std::variant<SerialiseSource<Ts>...>`.
-If `Ts` is empty, then a `std::variant<std::monostate>`, since `std::variant` cannot have zero types.
+`serialise_source` for a `variant<Ts...>` is simply a `std::variant<serialise_source<Ts>...>`.
+If `Ts` is empty, then a `std::variant<std::monostate>` (since `std::variant` cannot have zero types).
 
-`Deserialiser` for a `Variant<Ts...>` has the following member functions:
+`deserialiser` for a `variant<Ts...>` has the following member functions:
 
  - `index()`: returns the zero-based index of the contained type. (Only if `Ts` is not empty.)
- - `get<Index>()`: gets a `Deserialiser` for the contained type (or deserialised value for automatically deserialisable types) if `Index == index()`, otherwise throws `std::bad_variant_access`.
- - `visit(func)`: invokes a function with a `Deserialiser` for the contained type (or deserialised value for automatically deserialisable types) as the argument.
+ - `get<Index>()`: gets a `deserialiser` for the contained type (or deserialised value for automatically deserialisable types) if `Index == index()`, otherwise throws `std::bad_variant_access`.
+ - `visit(func)`: invokes a function with a `deserialiser` for the contained type (or deserialised value for automatically deserialisable types) as the argument.
 
-### Pair
+### pair
 
-`Pair<T1, T2>` is a type which contains an instance of `T1` and an instance of `T2`.
+`pair<T1, T2>` is a type which contains an instance of `T1` and an instance of `T2`.
 
-`SerialiseSource` for a `Pair<T1, T2>` is simply an `std::pair` of `SerialiseSource<T1>` and `SerialiseSource<T2>`.
+`serialise_source` for a `pair<T1, T2>` is simply an `std::pair` of `serialise_source<T1>` and `serialise_source<T2>`.
 
-`Deserialiser` for a `Pair<T1, T2>` has the following member functions:
+`deserialiser` for a `pair<T1, T2>` has the following member functions:
 
- - `first()`: returns a `Deserialiser<T1>` (or deserialised value for automatically deserialisable `T1`).
- - `second()`: returns a `Deserialiser<T2>` (or deserialised value for automatically deserialisable `T2`).
+ - `first()`: returns a `deserialiser<T1>` (or deserialised value for automatically deserialisable `T1`).
+ - `second()`: returns a `deserialiser<T2>` (or deserialised value for automatically deserialisable `T2`).
  - `get<Index>()`: returns `first()` for `Index == 0`, and `second()` for `Index == 1`.
 
 The deserialiser is also destructurable into its two elements using structured bindings.
 The first binding is to the result of `first()`, and the second binding is to the result of `second()`.
 
-### Tuple
+### tuple
 
-`Tuple<Ts...>` is a heterogeneous collection of any number (including zero) of types.
+`tuple<Ts...>` is a heterogeneous collection of any number (including zero) of types.
 
-`SerialiseSource` for a `Tuple<Ts...>` is simple an `std::tuple<SerialiseSource<Ts>...>`.
+`serialise_source` for a `tuple<Ts...>` is simple an `std::tuple<serialise_source<Ts>...>`.
 
-`Deserialiser` for a `Tuple<Ts...>` has the member function `get<Index>()` which gets a `Deserialiser` (or the deserialised value, for automatically deserialisable types) for an element by index.
+`deserialiser` for a `tuple<Ts...>` has the member function `get<Index>()` which gets a `deserialiser` (or the deserialised value, for automatically deserialisable types) for an element by index.
 
 The deserialiser is also destructurable into its elements using structured bindings.
 
-### Structs
+### Records
 
-Serialise++ supports user-defined structs via the `SerialisableStruct<Fields...>` class template.
-By inheriting from or aliasing `SerialisableStruct`, an automatically serialisable struct is declared via template metaprogramming.
+Serialise++ supports user-defined record (struct) types via the `record<Args...>` class template.
+By inheriting from or aliasing `record`, an automatically serialisable record type is declared via template metaprogramming.
 
-Fields of a `SerialisableStruct` are specified with the `Field<Name, T>` class template.
-`Field`'s `Name` template argument is a string literal specifying the name of the field (which must be unique within the same `SerialisableStruct`). `Field`'s `T` template argument is the type of the field data.
+Fields of a `record` are specified with the `field<Name, T>` class template.
+`field`'s `Name` template argument is a string literal specifying the name of the field (which must be unique within the same `record` type). `field`'s `T` template argument is the type of the field data.
 
-For example:
+Single inheritance is supported via the `base<T>` tag type.
+Fields from the base `record` will be prepended to the declared fields of the derived `record`.
+
+`Args...` is a sequence of `field`, optionally starting with a `base`.
+
+For example, with no inheritance:
 
 ```c++
-struct MyStruct : SerialisableStruct<
-    Field<"foo", std::int32_t>,
-    Field<"bar", Optional<std::uint64_t>>,
-    Field<"qux", List<std::int8_t>>
+struct my_record : record<
+    field<"foo", std::int32_t>,
+    field<"bar", optional<std::uint64_t>>,
+    field<"qux", dynamic_array<std::int8_t>>
 > {};
 ```
 
-Note that a `SerialisableStruct` instance does not actually have any data members and so isn't usable as a normal struct.
-The fields are solely for informing Serialise++ what fields to serialise.
+Example with inheritance:
 
-`SerialiseSource` for a `SerialisableStruct` is a tuple-like type which holds a `SerialiseSource` for each field's type.  
-It can be constructed from an initializer-list of elements like `std::tuple`.
+```c++
+struct my_derived_record : record<
+    base<my_record>,
+    field<"extra", float>
+> {};
+```
+
+Note that a `record` instance does not actually have any data members and so isn't usable as a normal struct.
+The fields are solely for informing Serialise++ what to serialise.
+
+`serialise_source` for a `record` is a tuple-like type which holds a `serialise_source` for each field's type.  
+It can be constructed from an initializer-list of elements, similar to `std::tuple`.
 It has the member function `get<Name>()` which gets a reference to a field by name.
 
-`Deserialiser` for a `SerialisableStruct` has the member function `get<Name>()` which gets a `Deserialiser` (or the deserialised value, for automatically deserialisable types) for a field by name.
-
-The deserialiser is also destructurable into its fields using structured bindings.
+`deserialiser` for a `record` has the member function `get<Name>()` which gets a `deserialiser` (or the deserialised value, for automatically deserialisable types) for a field by name.
+The deserialiser is also destructurable into its fields using structured bindings.  
+A deserialiser is implicitly convertible to a deserialiser for any of the base `record`s in the inheritance hierarchy.
 
 ## Real-world Example
 
 Here's a more "real world" use case of serialising and deserialising, with various nesting of different types.
 
 ```c++
-struct Date : SerialisableStruct<
-    Field<"year", std::uint16_t>,
-    Field<"month", std::uint8_t>,
-    Field<"day", std::uint8_t>
+struct date_t : record<
+    field<"year", std::uint16_t>,
+    field<"month", std::uint8_t>,
+    field<"day", std::uint8_t>
 > {};
 
-struct StockRecord : SerialisableStruct<
-    Field<"date", Date>,
-    Field<"price", float>,
-    Field<"is_open", bool>
+struct stock_record : record<
+    field<"date", date_t>,
+    field<"price", float>,
+    field<"is_open", bool>
 > {};
 
-struct StockHistory : SerialisableStruct<
-    Field<"instrument_id", std::uint64_t>,
-    Field<"records", List<StockRecord>>
+struct stock_history : record<
+    field<"instrument_id", std::uint64_t>,
+    field<"records", dynamic_array<stock_record>>
 > {};
 
-SerialiseSource<StockHistory> const source{
+serialise_source<stock_history> const source{
     314'159'265ull,         // instrument_id
     {{                      // records
         {                   // records[0]
@@ -272,14 +287,14 @@ SerialiseSource<StockHistory> const source{
         }
     }}
 };
-SerialiseBuffer buffer;
+basic_serialise_buffer buffer;
 serialise(source, buffer);
 
-Deserialiser<StockHistory> const stock_history = deserialise<StockHistory>(buffer.span());
-std::uint64_t const instrument_id = stock_history.get<"instrument_id">();
-Deserialiser<List<StockRecord>> const records = stock_history.get<"records">();
-for (Deserialiser<StockRecord> const record : records.elements()) {
-    Deserialiser<Date> const date = record.get<"date">();
+deserialiser<stock_history> const history = deserialise<stock_history>(buffer.span());
+std::uint64_t const instrument_id = history.get<"instrument_id">();
+deserialiser<dynamic_array<stock_record>> const records = history.get<"records">();
+for (deserialiser<stock_record> const record : records.elements()) {
+    deserialiser<date_t> const date = record.get<"date">();
     float const price = record.get<"price">();
     bool const is_open = record.get<"is_open">();
     // Do something with the record data...
@@ -288,18 +303,21 @@ for (Deserialiser<StockRecord> const record : records.elements()) {
 
 ## Error Handling
 
-During serialisation, there should be no errors, besides something critical like out-of-memory.
-Internal error scenarios are checked with `assert()`, but these should never occur unless you are using Serialise++ incorrectly or there is a bug.
+During serialisation, runtime errors can occur if the object to be serialised is too big for the Serialise++ format.
+This will cause an instance of `object_size_error` to be thrown.  
+Exceptions can also arise from memory allocation errors, but these should be rare and are mostly unrecoverable.
 
 During deserialisation, runtime errors can occur if the bytes buffer is malformed, which could conceivably occur if you are retrieving the data from an untrusted/unreliable source.
-These cause instances of `DeserialiseError` to be thrown. `DeserialiseError` has the following type hierarchy:
+These cause instances of `deserialise_error` to be thrown. `deserialise_error` has the following type hierarchy:
 
- - `DeserialiseError` (abstract)
-   - `BufferSizeError` (abstract): Indicates that the provided buffer is too small to contain the requested type.
-     - `FixedBufferSizeError`: Indicates that the provided fixed data buffer is too small to contain the requested type.
-     - `VariableBufferSizeError`: Indicates that the provided variable data buffer is too small to contain the requested type (or alternatively, a variable data offset is out of range).
+ - `deserialise_error` (abstract)
+   - `buffer_size_error` (abstract): Indicates that the provided buffer is too small to contain the requested type.
+     - `fixed_buffer_size_error`: Indicates that the provided fixed data buffer is too small to contain the requested type.
+     - `variable_buffer_size_error`: Indicates that the provided variable data buffer is too small to contain the requested type (or alternatively, a variable data offset is out of range).
 
-These exceptions may be thrown at any time when constructing a `Deserialiser` instance or deserialising.
+These exceptions may be thrown at any time when constructing a `deserialiser` instance or deserialising.
+
+Internal error scenarios are checked with `assert()`, but these should never occur unless you are using Serialise++ incorrectly or there is a bug.
 
 ## Advanced Usage
 

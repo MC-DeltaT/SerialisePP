@@ -1,3 +1,0 @@
-[submodule "libraries/SimpleTest"]
-	path = libraries/SimpleTest
-	url = git@github.com:MC-DeltaT/SimpleTest.git

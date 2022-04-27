@@ -12,68 +12,81 @@
 namespace serialpp {
 
     /*
-        Pair:
+        pair:
             Represented as the result of contiguously serialising the first element, then the second element.
     */
 
 
     // Serialisable tuple of two (possibly distinct) types.
-    template<Serialisable T1, Serialisable T2>
-    struct Pair {};
-
-
-    template<Serialisable T1, Serialisable T2>
-    struct FixedDataSize<Pair<T1, T2>> : SizeTConstant<FIXED_DATA_SIZE<T1> + FIXED_DATA_SIZE<T2>> {};
-
-
-    template<Serialisable T1, Serialisable T2>
-    class SerialiseSource<Pair<T1, T2>> : public std::pair<SerialiseSource<T1>, SerialiseSource<T2>> {
-    public:
-        using std::pair<SerialiseSource<T1>, SerialiseSource<T2>>::pair;
+    template<serialisable T1, serialisable T2>
+    struct pair {
+        using first = T1;
+        using second = T2;
     };
 
 
-    template<Serialisable T1, Serialisable T2>
-    struct Serialiser<Pair<T1, T2>> {
-        SerialiseTarget operator()(SerialiseSource<Pair<T1, T2>> const& source, SerialiseTarget target) const {
-            return target.push_fixed_field<T1>([&source](SerialiseTarget first_target) {
-                return Serialiser<T1>{}(source.first, first_target);
-            }).push_fixed_field<T2>([&source](SerialiseTarget second_target) {
-                return Serialiser<T2>{}(source.second, second_target);
+    template<serialisable T1, serialisable T2>
+    struct fixed_data_size<pair<T1, T2>> : detail::size_t_constant<fixed_data_size_v<T1> + fixed_data_size_v<T2>> {};
+
+
+    template<serialisable T1, serialisable T2>
+    class serialise_source<pair<T1, T2>> : public std::pair<serialise_source<T1>, serialise_source<T2>> {
+    public:
+        using std::pair<serialise_source<T1>, serialise_source<T2>>::pair;
+    };
+
+
+    template<serialisable T1, serialisable T2>
+    struct serialiser<pair<T1, T2>> {
+        template<serialise_buffer Buffer>
+        constexpr serialise_target<Buffer> operator()(serialise_source<pair<T1, T2>> const& source,
+                serialise_target<Buffer> target) const {
+            return target.push_fixed_subobject<T1>([&source](auto first_target) {
+                return serialiser<T1>{}(source.first, first_target);
+            }).push_fixed_subobject<T2>([&source](auto second_target) {
+                return serialiser<T2>{}(source.second, second_target);
             });
         }
     };
 
 
-    template<Serialisable T1, Serialisable T2>
-    class Deserialiser<Pair<T1, T2>> : public DeserialiserBase<Pair<T1, T2>> {
+    template<serialisable T1, serialisable T2>
+    class deserialiser<pair<T1, T2>> : public deserialiser_base {
     public:
-        using DeserialiserBase<Pair<T1, T2>>::DeserialiserBase;
+        using deserialiser_base::deserialiser_base;
+
+        constexpr deserialiser(const_bytes_span fixed_data, const_bytes_span variable_data) :
+            deserialiser_base{no_fixed_buffer_check, fixed_data, variable_data}
+        {
+            check_fixed_buffer_size<pair<T1, T2>>(_fixed_data);
+        }
 
         // Gets the first element.
         [[nodiscard]]
-        auto first() const {
-            Deserialiser<T1> const deserialiser{
-                this->_fixed_data.first(FIXED_DATA_SIZE<T1>),
-                this->_variable_data
+        constexpr auto_deserialise_t<T1> first() const {
+            deserialiser<T1> const deser{
+                no_fixed_buffer_check,
+                _fixed_data.first(fixed_data_size_v<T1>),
+                _variable_data
             };
-            return auto_deserialise(deserialiser);
+            return auto_deserialise(deser);
         }
 
         // Gets the second element.
         [[nodiscard]]
-        auto second() const {
-            Deserialiser<T2> const deserialiser{
-                this->_fixed_data.subspan(FIXED_DATA_SIZE<T1>, FIXED_DATA_SIZE<T2>),
-                this->_variable_data
+        constexpr auto_deserialise_t<T2> second() const {
+            deserialiser<T2> const deser{
+                no_fixed_buffer_check,
+                _fixed_data.subspan(fixed_data_size_v<T1>, fixed_data_size_v<T2>),
+                _variable_data
             };
-            return auto_deserialise(deserialiser);
+            return auto_deserialise(deser);
         }
 
         // Gets an element by index.
         template<std::size_t Index> requires (Index <= 1)
         [[nodiscard]]
-        auto get() const {
+        constexpr auto get() const {
             if constexpr (Index == 0) {
                 return first();
             }
@@ -91,16 +104,19 @@ namespace serialpp {
 
 namespace std {
 
-    template<serialpp::Serialisable T1, serialpp::Serialisable T2>
-    struct tuple_size<serialpp::Deserialiser<serialpp::Pair<T1, T2>>> : integral_constant<size_t, 2> {};
+    // Structured binding support.
 
 
-    template<serialpp::Serialisable T1, serialpp::Serialisable T2>
-    struct tuple_element<0, serialpp::Deserialiser<serialpp::Pair<T1, T2>>>
-        : type_identity<serialpp::AutoDeserialiseResult<T1>> {};
+    template<::serialpp::serialisable T1, ::serialpp::serialisable T2>
+    struct tuple_size<::serialpp::deserialiser<::serialpp::pair<T1, T2>>> : integral_constant<size_t, 2> {};
 
-    template<serialpp::Serialisable T1, serialpp::Serialisable T2>
-    struct tuple_element<1, serialpp::Deserialiser<serialpp::Pair<T1, T2>>>
-        : type_identity<serialpp::AutoDeserialiseResult<T2>> {};
+
+    template<::serialpp::serialisable T1, ::serialpp::serialisable T2>
+    struct tuple_element<0, ::serialpp::deserialiser<::serialpp::pair<T1, T2>>>
+        : type_identity<::serialpp::auto_deserialise_t<T1>> {};
+
+    template<::serialpp::serialisable T1, ::serialpp::serialisable T2>
+    struct tuple_element<1, ::serialpp::deserialiser<::serialpp::pair<T1, T2>>>
+        : type_identity<::serialpp::auto_deserialise_t<T2>> {};
 
 }

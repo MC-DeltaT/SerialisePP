@@ -2,12 +2,12 @@
 
 #include <algorithm>
 #include <array>
-#include <compare>
 #include <cstddef>
 #include <optional>
 #include <span>
 #include <vector>
 
+#include <serialpp/buffer.hpp>
 #include <serialpp/common.hpp>
 #include <serialpp/utility.hpp>
 
@@ -15,27 +15,38 @@
 namespace serialpp::test {
 
     template<std::size_t FixedSize>
-    struct MockSerialisable {};
+    struct mock_serialisable {};
 
 
     template<std::size_t N>
     [[nodiscard]]
-    bool buffer_equal(SerialiseBuffer const& buffer, std::array<unsigned char, N> const& expected) {
-        return std::ranges::equal(buffer.span(), std::as_bytes(std::span{expected}));
+    constexpr bool buffer_equal(serialise_buffer auto const& buffer, std::array<unsigned char, N> const& expected) {
+        return std::ranges::equal(buffer.span(), std::span{expected}, {}, [](std::byte e) {
+            return std::to_integer<unsigned char>(e);
+        });
     }
 
 
-    // Checks if two ConstBytesView view the same memory location and have the same size.
+    // Checks if two const_bytes_span view the same memory location and have the same size.
     [[nodiscard]]
-    inline bool bytes_view_same(ConstBytesView v1, ConstBytesView v2) {
+    constexpr bool bytes_view_same(const_bytes_span v1, const_bytes_span v2) {
         return v1.data() == v2.data() && v1.size() == v2.size();
     }
 
 
     template<class R>
     [[nodiscard]]
-    ConstBytesView as_const_bytes_view(R const& range) {
+    const_bytes_span as_const_bytes_span(R const& range) {
         return std::as_bytes(std::span{range});
+    }
+
+
+    template<std::size_t N>
+    [[nodiscard]]
+    constexpr std::array<std::byte, N> uchar_array_to_bytes(std::array<unsigned char, N> const& array) {
+        std::array<std::byte, N> bytes{};
+        std::ranges::transform(array, bytes.begin(), [](unsigned char e) { return std::byte{e}; });
+        return bytes;
     }
 
 }
@@ -43,40 +54,47 @@ namespace serialpp::test {
 namespace serialpp {
 
     template<std::size_t FixedSize>
-    struct FixedDataSize<test::MockSerialisable<FixedSize>> : SizeTConstant<FixedSize> {};
+    struct fixed_data_size<test::mock_serialisable<FixedSize>> : detail::size_t_constant<FixedSize> {};
 
     template<std::size_t FixedSize>
-    struct SerialiseSource<test::MockSerialisable<FixedSize>> {
-        mutable std::vector<SerialiseTarget> targets;
+    struct serialise_source<test::mock_serialisable<FixedSize>> {
+        mutable std::vector<serialise_target<basic_serialise_buffer<>>> targets;
     };
 
     template<std::size_t FixedSize>
-    struct Serialiser<test::MockSerialisable<FixedSize>> {
-        SerialiseTarget operator()(SerialiseSource<test::MockSerialisable<FixedSize>> const& source,
-                SerialiseTarget target) const {
+    struct serialiser<test::mock_serialisable<FixedSize>> {
+        template<serialise_buffer Buffer>
+        serialise_target<Buffer> operator()(serialise_source<test::mock_serialisable<FixedSize>> const& source,
+                serialise_target<Buffer> target) const {
             source.targets.push_back(target);
             return target;
         }
     };
 
     template<std::size_t FixedSize>
-    class Deserialiser<test::MockSerialisable<FixedSize>> : public DeserialiserBase<test::MockSerialisable<FixedSize>> {
+    class deserialiser<test::mock_serialisable<FixedSize>> : public deserialiser_base {
     public:
-        using DeserialiserBase<test::MockSerialisable<FixedSize>>::DeserialiserBase;
+        using deserialiser_base::deserialiser_base;
 
-        using DeserialiserBase<test::MockSerialisable<FixedSize>>::_fixed_data;
-        using DeserialiserBase<test::MockSerialisable<FixedSize>>::_variable_data;
+        constexpr deserialiser(const_bytes_span fixed_data, const_bytes_span variable_data) :
+            deserialiser_base{no_fixed_buffer_check, fixed_data, variable_data}
+        {
+            check_fixed_buffer_size<test::mock_serialisable<FixedSize>>(_fixed_data);
+        }
+
+        using deserialiser_base::_fixed_data;
+        using deserialiser_base::_variable_data;
     };
 
     template<std::size_t FixedSize>
     [[nodiscard]]
-    constexpr bool operator==(Deserialiser<test::MockSerialisable<FixedSize>> const& lhs,
-            Deserialiser<test::MockSerialisable<FixedSize>> const& rhs) {
+    constexpr bool operator==(deserialiser<test::mock_serialisable<FixedSize>> const& lhs,
+            deserialiser<test::mock_serialisable<FixedSize>> const& rhs) {
         return test::bytes_view_same(lhs._fixed_data, rhs._fixed_data)
             && test::bytes_view_same(lhs._variable_data, rhs._variable_data);
     }
 
 
-    static_assert(Serialisable<test::MockSerialisable<10>>);
+    static_assert(serialisable<test::mock_serialisable<10>>);
 
 }
