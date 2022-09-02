@@ -1,6 +1,5 @@
 #pragma once
 
-#include <cassert>
 #include <concepts>
 #include <cstddef>
 #include <tuple>
@@ -15,7 +14,8 @@ namespace serialpp {
 
     /*
         record:
-            Represented as the result of contiguously serialising each field.
+            Represented as the result of contiguously serialising each field in order of declaration. Inherited fields
+            are ordered before those declared in the derived record.
     */
 
 
@@ -38,14 +38,14 @@ namespace serialpp {
         };
 
 
-        // Checks if a type is a type_list of field.
         template<typename T>
-        static inline constexpr bool is_field_list = false;
+        inline constexpr bool is_field_list = false;
 
         template<field... Fs>
-        static inline constexpr bool is_field_list<type_list<Fs...>> = true;
+        inline constexpr bool is_field_list<type_list<Fs...>> = true;
 
 
+        // A type_list of field.
         template<typename T>
         concept field_list = is_field_list<T>;
 
@@ -68,12 +68,12 @@ namespace serialpp {
 
     namespace detail {
 
-        // Checks if a type is a type_list of record.
+        // True if T is a type_list of record.
         template<typename T>
-        static inline constexpr bool is_record_list = false;
+        inline constexpr bool is_record_list = false;
 
-        template<typename... Ts>
-        static inline constexpr bool is_record_list<type_list<Ts...>> = (is_record_type<Ts>::value && ...);
+        template<typename... Ts> requires (is_record_type<Ts>::value && ...)
+        inline constexpr bool is_record_list<type_list<Ts...>> = true;
 
 
         template<typename T>
@@ -94,6 +94,28 @@ namespace serialpp {
     concept record_type = detail::is_record_type<T>::value;
 
 
+    namespace detail {
+
+        // Checks if a list of fields contains a field with the specified name.
+        template<field_list Fields, constant_string Name>
+        inline constexpr bool contains_field =
+            Fields::head::name == Name || contains_field<typename Fields::tail, Name>;
+
+        template<constant_string Name>
+        inline constexpr bool contains_field<type_list<>, Name> = false;
+
+
+        // Checks if all fields have unique names.
+        template<field_list Fields>
+        inline constexpr bool all_fields_unique =
+            !contains_field<typename Fields::tail, Fields::head::name> && all_fields_unique<typename Fields::tail>;
+
+        template<>
+        inline constexpr bool all_fields_unique<type_list<>> = true;
+
+    }
+
+
     // Base for compound structures that can contain arbitrary serialisable fields.
     // Alias or inherit from this to implement your own record type.
     // struct my_record : record<
@@ -106,7 +128,8 @@ namespace serialpp {
     //     base<my_record>,
     //     field<"extra", float>
     //  > {};
-    template<class... Args>
+    // All fields of a record must have unique names.
+    template<typename... Args>
     struct record;
 
 
@@ -116,6 +139,8 @@ namespace serialpp {
         using base_fields = type_list<>;
         using own_fields = type_list<Fs...>;
         using fields = own_fields;
+
+        static_assert(detail::all_fields_unique<fields>);
     };
 
 
@@ -129,63 +154,44 @@ namespace serialpp {
         using own_fields = type_list<Fs...>;
         // All fields (includes all base record fields too).
         using fields = detail::type_list_concat<base_fields, own_fields>::type;
+
+        static_assert(detail::all_fields_unique<fields>);
     };
-
-
-    namespace detail {
-
-        // Checks if a list of fields contains a field with the specified name.
-        template<field_list Fields, constant_string Name>
-        [[nodiscard]]
-        consteval bool contains_field() noexcept {
-            if constexpr (Fields::size == 0) {
-                return false;
-            }
-            else if constexpr (Fields::head::name == Name) {
-                return true;
-            }
-            else {
-                return contains_field<typename Fields::tail, Name>();
-            }
-        }
-
-
-        template<field_list Fields, constant_string Name> requires (contains_field<Fields, Name>())
-        [[nodiscard]]
-        consteval auto field_type() noexcept {
-            if constexpr (Fields::head::name == Name) {
-                return typename Fields::head::type{};
-            }
-            else {
-                return field_type<typename Fields::tail, Name>();
-            }
-        }
-
-    }
 
 
     // Checks if a record has a field with the specified name.
     template<record_type R, constant_string Name>
-    static inline constexpr bool has_field = detail::contains_field<typename R::fields, Name>();
+    inline constexpr bool has_field = detail::contains_field<typename R::fields, Name>;
+
+
+    namespace detail {
+
+        template<field_list Fields, constant_string Name>
+        struct field_type
+            : std::conditional_t<Fields::head::name == Name,
+                std::type_identity<typename Fields::head::type>,
+                field_type<typename Fields::tail, Name>> {};
+
+    }
 
 
     // Gets the type of the record field with the specified name.
-    // If there is no such field, a compile error occurs.
+    // If there is no such field, the usage is ill-formed.
     template<record_type R, constant_string Name>
-    using field_type = decltype(detail::field_type<typename R::fields, Name>());
+    using field_type = detail::field_type<typename R::fields, Name>::type;
 
 
     // Checks if record R1 inherits from (directly or indirectly) or is the same as record R2.
     template<class R1, class R2>
     concept record_derived_from =
         record_type<R1> && record_type<R2>
-        && (std::same_as<R1, R2> || detail::type_list_contains<typename R1::bases, R2>());
+        && (std::same_as<R1, R2> || detail::type_list_contains<typename R1::bases, R2>);
 
 
     namespace detail {
 
         template<field_list Fields>
-        static inline constexpr std::size_t fields_fixed_data_size =
+        inline constexpr std::size_t fields_fixed_data_size =
             fixed_data_size_v<typename Fields::head::type> + fields_fixed_data_size<typename Fields::tail>;
 
         template<>
@@ -201,8 +207,8 @@ namespace serialpp {
     namespace detail {
 
         // Gets the offset of a record field from the beginning of the fixed data section.
-        // If there is no field with the specified name, a compile error occurs.
-        template<field_list Fields, constant_string Name> requires (contains_field<Fields, Name>())
+        // If there is no field with the specified name, the usage is ill-formed.
+        template<field_list Fields, constant_string Name> requires contains_field<Fields, Name>
         [[nodiscard]]
         consteval std::size_t named_field_offset() noexcept {
             if constexpr (Fields::head::name == Name) {
@@ -215,14 +221,9 @@ namespace serialpp {
         }
 
 
-        // Gets the offset of a record field from the beginning of the fixed data section.
-        // If Index is out of bounds, a compile error occurs.
-        template<field_list Fields, std::size_t Index> requires (Index < Fields::size)
-        static inline constexpr std::size_t indexed_field_offset =
-            fixed_data_size_v<typename Fields::head::type> + indexed_field_offset<typename Fields::tail, Index - 1>;
-
-        template<field_list Fields>
-        static inline constexpr std::size_t indexed_field_offset<Fields, 0> = 0;
+        // Gets the name of a field by index.
+        template<field_list Fields, std::size_t Index>
+        inline constexpr auto indexed_field_name = type_list_element<Fields, Index>::type::name;
 
 
         template<constant_string Name, serialisable T>
@@ -251,20 +252,20 @@ namespace serialpp {
         class record_serialise_source;
 
         // Inspired by "Beyond struct: Meta-programming a struct Replacement in C++20" by John Bandela: https://youtu.be/FXfrojjIo80
-        template<field... Fields>
-        class record_serialise_source<type_list<Fields...>>
-            : public record_serialise_source_element<Fields::name, typename Fields::type>... {
+        template<field... Fs>
+        class record_serialise_source<type_list<Fs...>>
+            : public record_serialise_source_element<Fs::name, typename Fs::type>... {
         public:
-            constexpr record_serialise_source() = default;
-            constexpr record_serialise_source(record_serialise_source&&) = default;
-            constexpr record_serialise_source(record_serialise_source const&) = default;
+            record_serialise_source() = default;
+            record_serialise_source(record_serialise_source&&) = default;
+            record_serialise_source(record_serialise_source const&) = default;
 
-            constexpr record_serialise_source(serialise_source<typename Fields::type>&&... elements)
+            constexpr record_serialise_source(serialise_source<typename Fs::type>&&... elements)
                     noexcept((std::is_nothrow_constructible_v<
-                        record_serialise_source_element<Fields::name, typename Fields::type>,
-                        serialise_source<typename Fields::type>> && ...))
-                    requires (sizeof...(Fields) > 0) :
-                record_serialise_source_element<Fields::name, typename Fields::type>{
+                        record_serialise_source_element<Fs::name, typename Fs::type>,
+                        serialise_source<typename Fs::type>> && ...))
+                    requires (sizeof...(Fs) > 0) :
+                record_serialise_source_element<Fs::name, typename Fs::type>{
                     std::move(elements)}...
             {}
 
@@ -272,17 +273,29 @@ namespace serialpp {
             record_serialise_source& operator=(record_serialise_source const&) = default;
 
             // Gets a field by name.
-            template<constant_string Name> requires (contains_field<type_list<Fields...>, Name>())
+            template<constant_string Name> requires contains_field<type_list<Fs...>, Name>
             [[nodiscard]]
             constexpr auto& get() noexcept {
                 return record_serialise_source_get<Name>(*this);
             }
 
             // Gets a field by name.
-            template<constant_string Name> requires (contains_field<type_list<Fields...>, Name>())
+            template<constant_string Name> requires contains_field<type_list<Fs...>, Name>
             [[nodiscard]]
             constexpr auto const& get() const noexcept {
                 return record_serialise_source_get<Name>(*this);
+            }
+
+            // Gets a field by index.
+            template<std::size_t Index> requires (Index < sizeof...(Fs))
+            constexpr auto& get() noexcept {
+                return get<indexed_field_name<Fs, Index>>();
+            }
+
+            // Gets a field by index.
+            template<std::size_t Index> requires (Index < sizeof...(Fs))
+            constexpr auto const& get() const noexcept {
+                return get<indexed_field_name<Fs, Index>>();
             }
         };
 
@@ -296,30 +309,33 @@ namespace serialpp {
     };
 
 
+    namespace detail {
+
+        template<typename B, class Fields>
+        inline constexpr bool is_buffer_for_fields = false;
+
+        template<typename B, field... Fs>
+        inline constexpr bool is_buffer_for_fields<B, type_list<Fs...>> = (buffer_for<B, typename Fs::type> && ...);
+
+    }
+
+
     template<record_type R>
     struct serialiser<R> {
-        template<serialise_buffer Buffer>
-        constexpr serialise_target<Buffer> operator()(serialise_source<R> const& source,
-                serialise_target<Buffer> target) const {
-            return _serialise<typename R::fields>(source, target);
+        template<typename B> requires detail::is_buffer_for_fields<B, typename R::fields>
+        static constexpr void serialise(serialise_source<R> const& source, B&& buffer, std::size_t fixed_offset) {
+            [&source, &buffer, &fixed_offset] <std::size_t... Is> (std::index_sequence<Is...>) {
+                (_serialise<Is>(source, buffer, fixed_offset), ...);
+            }(std::make_index_sequence<R::fields::size>{});
         }
 
     private:
-        template<detail::field_list Fields, serialise_buffer Buffer>
-        [[nodiscard]]
-        constexpr serialise_target<Buffer> _serialise(serialise_source<R> const& source,
-                serialise_target<Buffer> target) const {
-            if constexpr (Fields::size > 0) {
-                using head_field = Fields::head;
-                using head_type = head_field::type;
-                target = target.push_fixed_subobject<head_type>([&source](auto field_target) {
-                    return serialiser<head_type>{}(source.get<head_field::name>(), field_target);
-                });
-                return _serialise<typename Fields::tail>(source, target);
-            }
-            else {
-                return target;
-            }
+        template<std::size_t Index, typename B>
+            requires (Index < R::fields::size) && detail::is_buffer_for_fields<B, typename R::fields>
+        static constexpr void _serialise(serialise_source<R> const& source, B&& buffer, std::size_t& fixed_offset) {
+            using field = typename detail::type_list_element<typename R::fields, Index>::type;
+            fixed_offset = push_fixed_subobject<typename field::type>(fixed_offset,
+                detail::bind_serialise(source.get<field::name>(), buffer));
         }
     };
 
@@ -329,54 +345,37 @@ namespace serialpp {
     public:
         using deserialiser_base::deserialiser_base;
 
-        constexpr deserialiser(const_bytes_span fixed_data, const_bytes_span variable_data) :
-            deserialiser_base{no_fixed_buffer_check, fixed_data, variable_data}
-        {
-            check_fixed_buffer_size<R>(_fixed_data);
-        }
-
         // Gets a field by name.
-        // If there is no field with the specified name, a compile error occurs.
+        // If there is no field with the specified name, the usage is ill-formed.
         template<constant_string Name> requires has_field<R, Name>
         [[nodiscard]]
-        constexpr auto_deserialise_t<field_type<R, Name>> get() const {
+        constexpr deserialise_t<field_type<R, Name>> get() const {
             constexpr auto offset = detail::named_field_offset<typename R::fields, Name>();
             using field_t = field_type<R, Name>;
             return _get<offset, field_t>();
         }
 
         // Gets a field by zero-based index.
-        // If Index is out of bounds, a compile error occurs.
+        // If Index is out of bounds, the usage is ill-formed.
         template<std::size_t Index> requires (Index < R::fields::size)
         [[nodiscard]]
         constexpr auto get() const {
-            constexpr auto offset = detail::indexed_field_offset<typename R::fields, Index>;
-            using field_t = detail::type_list_element<typename R::fields, Index>::type::type;
-            return _get<offset, field_t>();
+            constexpr auto name = detail::indexed_field_name<typename R::fields, Index>;
+            return get<name>();
         }
 
         // Conversion to deserialiser for any base record type.
         template<serialisable T> requires record_derived_from<R, T>
         constexpr operator deserialiser<T>() const noexcept {
             static_assert(fixed_data_size_v<T> <= fixed_data_size_v<R>);
-            return deserialiser<T>{
-                no_fixed_buffer_check,
-                _fixed_data.first(fixed_data_size_v<T>),
-                _variable_data
-            };
+            return deserialise<T>(_buffer, _fixed_offset);
         }
 
     private:
         template<std::size_t Offset, serialisable T> requires (Offset + fixed_data_size_v<T> <= fixed_data_size_v<R>)
         [[nodiscard]]
-        constexpr auto_deserialise_t<T> _get() const {
-            assert(Offset <= _fixed_data.size());
-            deserialiser<T> const deser{
-                no_fixed_buffer_check,
-                _fixed_data.subspan(Offset, fixed_data_size_v<T>),
-                _variable_data
-            };
-            return auto_deserialise(deser);
+        constexpr deserialise_t<T> _get() const {
+            return deserialise<T>(_buffer, _fixed_offset + Offset);
         }
     };
 
@@ -395,7 +394,7 @@ namespace std {
     template<size_t I, ::serialpp::record_type R>
     struct tuple_element<I, ::serialpp::deserialiser<R>>
         : type_identity<
-            ::serialpp::auto_deserialise_t<
+            ::serialpp::deserialise_t<
                 typename ::serialpp::detail::type_list_element<typename R::fields, I>::type::type>> {};
 
 }

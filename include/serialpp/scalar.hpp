@@ -42,9 +42,14 @@ namespace serialpp {
             value{}
         {}
 
-        constexpr serialise_source(S value) noexcept :
+        constexpr serialise_source(S const value) noexcept :
             value{value}
         {}
+
+        constexpr serialise_source& operator=(S const new_value) noexcept {
+            value = new_value;
+            return *this;
+        }
 
         [[nodiscard]]
         constexpr operator S&() noexcept {
@@ -59,10 +64,7 @@ namespace serialpp {
 
 
     template<scalar S>
-    static inline constexpr bool enable_auto_deserialise<S> = true;
-
-
-    // TODO: is it an issue that nonscalar serialisers adjust the fixed data offset, but scalar serialisers do not?
+    inline constexpr bool enable_auto_deserialise<S> = true;
 
 
     /*
@@ -75,23 +77,15 @@ namespace serialpp {
 
     template<>
     struct serialiser<null> {
-        template<serialise_buffer Buffer>
-        constexpr serialise_target<Buffer> operator()(serialise_source<null>, serialise_target<Buffer> target) const {
-            return target;
-        }
+        static constexpr void serialise(serialise_source<null>, serialise_buffer auto&, std::size_t) {}
+
+        static constexpr void serialise(serialise_source<null>, mutable_bytes_span, std::size_t) {}
     };
 
     template<>
     class deserialiser<null> : public deserialiser_base {
     public:
         using deserialiser_base::deserialiser_base;
-
-        constexpr deserialiser(const_bytes_span fixed_data, const_bytes_span variable_data) :
-            deserialiser_base{no_fixed_buffer_check, fixed_data, variable_data}
-        {
-            // Will never actually throw because fixed size is 0.
-            check_fixed_buffer_size<null>(_fixed_data);
-        }
 
         constexpr null value() const {
             return null{};
@@ -109,13 +103,15 @@ namespace serialpp {
 
     template<>
     struct serialiser<std::byte> {
-        template<serialise_buffer Buffer>
-        constexpr serialise_target<Buffer> operator()(serialise_source<std::byte> source,
-                serialise_target<Buffer> target) const {
-            auto const buffer = target.subobject_fixed_data();
-            assert(buffer.size() >= 1);
-            buffer[0] = source.value;
-            return target;
+        static constexpr void serialise(serialise_source<std::byte> const source, serialise_buffer auto& buffer,
+                std::size_t const fixed_offset) {
+            serialise(source, buffer.span(), fixed_offset);
+        }
+
+        static constexpr void serialise(serialise_source<std::byte> const source, mutable_bytes_span const buffer,
+                std::size_t const fixed_offset) {
+            auto const fixed_buffer = buffer.subspan(fixed_offset, 1);
+            fixed_buffer[0] = source.value;
         }
     };
 
@@ -124,17 +120,10 @@ namespace serialpp {
     public:
         using deserialiser_base::deserialiser_base;
 
-        constexpr deserialiser(const_bytes_span fixed_data, const_bytes_span variable_data) :
-            deserialiser_base{no_fixed_buffer_check, fixed_data, variable_data}
-        {
-            check_fixed_buffer_size<std::byte>(_fixed_data);
-        }
-
         // Deserialises the value.
         [[nodiscard]]
         constexpr std::byte value() const {
-            assert(_fixed_data.size() >= 1);
-            return _fixed_data[0];
+            return _fixed_data()[0];
         }
     };
 
@@ -150,29 +139,31 @@ namespace serialpp {
 
     template<std::unsigned_integral U>
     struct serialiser<U> {
-        template<serialise_buffer Buffer>
-        constexpr serialise_target<Buffer> operator()(serialise_source<U> source, serialise_target<Buffer> target) const {
-            auto const buffer = target.subobject_fixed_data();
-            assert(buffer.size() >= sizeof(U));
+        static constexpr void serialise(serialise_source<U> const source, serialise_buffer auto& buffer,
+                std::size_t const fixed_offset) {
+            serialise(source, buffer.span(), fixed_offset);
+        }
+
+        static constexpr void serialise(serialise_source<U> const source, mutable_bytes_span const buffer,
+                std::size_t const fixed_offset) {
+            auto const fixed_buffer = buffer.subspan(fixed_offset, sizeof(U));
             if (std::is_constant_evaluated() || detail::is_mixed_endian) {
                 // Mixed endianness, or constexpr (can't reinterpret_cast at compile time).
                 U value = source.value;
                 for (std::size_t i = 0; i < sizeof(U); ++i) {
-                    buffer[i] = static_cast<std::byte>(value & 0xFFu);
+                    fixed_buffer[i] = static_cast<std::byte>(value & 0xFFu);
                     value >>= 8;
                 }
-                return target;
             }
             // Compilers aren't always smart enough to figure out the bit shifting thing above is just a copy.
             else if constexpr (detail::is_little_endian) {
-                std::copy_n(reinterpret_cast<std::byte const*>(&source.value), sizeof(U), buffer.begin());
-                return target;
+                std::copy_n(
+                    reinterpret_cast<std::byte const*>(&source.value), sizeof(U), fixed_buffer.begin());
             }
             else if constexpr (detail::is_big_endian) {
                 auto const source_begin = reinterpret_cast<std::byte const*>(&source.value);
                 auto const source_end = source_begin + sizeof(U);
-                std::reverse_copy(source_begin, source_end, buffer.begin());
-                return target;
+                std::reverse_copy(source_begin, source_end, fixed_buffer.begin());
             }
             else {
                 // Unreachable.
@@ -186,34 +177,27 @@ namespace serialpp {
     public:
         using deserialiser_base::deserialiser_base;
 
-        constexpr deserialiser(const_bytes_span fixed_data, const_bytes_span variable_data) :
-            deserialiser_base{no_fixed_buffer_check, fixed_data, variable_data}
-        {
-            check_fixed_buffer_size<U>(_fixed_data);
-        }
-
         // Deserialises the value.
         [[nodiscard]]
         constexpr U value() const {
-            assert(_fixed_data.size() >= sizeof(U));
             if (std::is_constant_evaluated() || detail::is_mixed_endian) {
                 // Mixed endianness, or constexpr (can't reinterpret_cast at compile time).
                 U value{};
                 for (std::size_t i = 0; i < sizeof(U); ++i) {
-                    value |= std::to_integer<U>(_fixed_data[i]) << (i * 8);
+                    value |= std::to_integer<U>(_fixed_data()[i]) << (i * 8);
                 }
                 return value;
             }
             // Compilers aren't always smart enough to figure out the bit shifting thing above is just a copy.
             else if constexpr (detail::is_little_endian) {
                 U value{};
-                std::copy_n(_fixed_data.begin(), sizeof(U), reinterpret_cast<std::byte*>(&value));
+                std::copy_n(_fixed_data().begin(), sizeof(U), reinterpret_cast<std::byte*>(&value));
                 return value;
             }
             else if constexpr (detail::is_big_endian) {
                 U value{};
                 std::reverse_copy(
-                    _fixed_data.begin(), _fixed_data.begin() + sizeof(U), reinterpret_cast<std::byte*>(&value));
+                    _fixed_data().begin(), _fixed_data().begin() + sizeof(U), reinterpret_cast<std::byte*>(&value));
                 return value;
             }
             else {
@@ -229,10 +213,16 @@ namespace serialpp {
 
     template<std::signed_integral S>
     struct serialiser<S> {
-        template<serialise_buffer Buffer>
-        constexpr serialise_target<Buffer> operator()(serialise_source<S> source,
-                serialise_target<Buffer> target) const {
-            return serialiser<std::make_unsigned_t<S>>{}(static_cast<std::make_unsigned_t<S>>(source), target);
+        static constexpr void serialise(serialise_source<S> const source, serialise_buffer auto& buffer,
+                std::size_t const fixed_offset) {
+            serialise(source, buffer.span(), fixed_offset);
+        }
+
+        static constexpr void serialise(serialise_source<S> const source, mutable_bytes_span const buffer,
+                std::size_t const fixed_offset) {
+            using unsigned_type = std::make_unsigned_t<S>;
+            auto const unsigned_value = static_cast<unsigned_type>(source);
+            serialpp::serialise(serialise_source<unsigned_type>{unsigned_value}, buffer, fixed_offset);
         }
     };
 
@@ -259,10 +249,15 @@ namespace serialpp {
 
     template<>
     struct serialiser<bool> {
-        template<serialise_buffer Buffer>
-        constexpr serialise_target<Buffer> operator()(serialise_source<bool> source,
-                serialise_target<Buffer> target) const {
-            return serialiser<std::byte>{}(static_cast<std::byte>(source ? 0x01u : 0x00u), target);
+        static constexpr void serialise(serialise_source<bool> const source, serialise_buffer auto& buffer,
+                std::size_t const fixed_offset) {
+            serialise(source, buffer.span(), fixed_offset);
+        }
+
+        static constexpr void serialise(serialise_source<bool> const source, mutable_bytes_span const buffer,
+                std::size_t const fixed_offset) {
+            auto const byte_value = source ? std::byte{0x01} : std::byte{0x00};
+            serialpp::serialise(serialise_source<std::byte>{byte_value}, buffer, fixed_offset);
         }
     };
 
@@ -289,18 +284,24 @@ namespace serialpp {
 
     template<floating_point F>
     struct serialiser<F> {
-        template<serialise_buffer Buffer>
-        constexpr serialise_target<Buffer> operator()(serialise_source<F> source,
-                serialise_target<Buffer> target) const {
+        static constexpr void serialise(serialise_source<F> const source, serialise_buffer auto& buffer,
+                std::size_t const fixed_offset) {
+            serialise(source, buffer.span(), fixed_offset);
+        }
+
+        static constexpr void serialise(serialise_source<F> const source, mutable_bytes_span const buffer,
+                std::size_t const fixed_offset) {
             // I think the std::bit_cast here is legit, since:
             //  - the size of the types is definitely the same
             //  - the fixed width integer types have no padding bits
             //  - we know F is IEEE-754 binary format, which has no padding bits
             if constexpr (sizeof(F) == 4) {
-                return serialiser<std::uint32_t>{}(std::bit_cast<std::uint32_t>(source.value), target);
+                auto const uint_value = std::bit_cast<std::uint32_t>(source.value);
+                serialpp::serialise(serialise_source<std::uint32_t>{uint_value}, buffer, fixed_offset);
             }
             else if constexpr (sizeof(F) == 8) {
-                return serialiser<std::uint64_t>{}(std::bit_cast<std::uint64_t>(source.value), target);
+                auto const uint_value = std::bit_cast<std::uint64_t>(source.value);
+                serialpp::serialise(serialise_source<std::uint64_t>{uint_value}, buffer, fixed_offset);
             }
             else {
                 // Unreachable.
@@ -314,12 +315,6 @@ namespace serialpp {
     public:
         using deserialiser_base::deserialiser_base;
 
-        constexpr deserialiser(const_bytes_span fixed_data, const_bytes_span variable_data) :
-            deserialiser_base{no_fixed_buffer_check, fixed_data, variable_data}
-        {
-            check_fixed_buffer_size<F>(_fixed_data);
-        }
-
         // Deserialises the value.
         [[nodiscard]]
         constexpr F value() const {
@@ -328,12 +323,10 @@ namespace serialpp {
             //  - the fixed width integer types have no padding bits
             //  - we know F is IEEE-754 binary format, which has no padding bits
             if constexpr (sizeof(F) == 4) {
-                return std::bit_cast<F>(
-                    deserialiser<std::uint32_t>{no_fixed_buffer_check, _fixed_data, _variable_data}.value());
+                return std::bit_cast<F>(deserialise<std::uint32_t>(_buffer, _fixed_offset));
             }
             else if constexpr (sizeof(F) == 8) {
-                return std::bit_cast<F>(
-                    deserialiser<std::uint64_t>{no_fixed_buffer_check, _fixed_data, _variable_data}.value());
+                return std::bit_cast<F>(deserialise<std::uint64_t>(_buffer, _fixed_offset));
             }
             else {
                 // Unreachable.

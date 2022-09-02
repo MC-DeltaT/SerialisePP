@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <functional>
 #include <limits>
+#include <type_traits>
 #include <utility>
 #include <variant>
 
@@ -28,9 +29,9 @@ namespace serialpp {
     */
 
 
-    using variant_index_t = std::uint8_t;
+    using variant_index_t = std::uint16_t;
 
-    static inline constexpr std::size_t max_variant_types = std::numeric_limits<variant_index_t>::max();
+    inline constexpr std::size_t max_variant_types = std::numeric_limits<variant_index_t>::max();
 
 
     // Serialisable type that holds exactly one instance of a type from a set of possible types.
@@ -64,32 +65,37 @@ namespace serialpp {
 
     template<serialisable... Ts>
     struct serialiser<variant<Ts...>> {
-        template<serialise_buffer Buffer>
-        constexpr serialise_target<Buffer> operator()(serialise_source<variant<Ts...>> const& source,
-                serialise_target<Buffer> target) const {
+        static constexpr void serialise(serialise_source<variant<Ts...>> const& source, serialise_buffer auto& buffer,
+                std::size_t fixed_offset) {
             if (source.valueless_by_exception()) {
                 throw std::bad_variant_access{};
             }
 
-            auto const index = source.index();
-            auto const relative_variable_offset = target.relative_subobject_variable_offset();
+            auto const source_index = source.index();
+            assert(source_index <= max_variant_types);
+            auto const index = static_cast<variant_index_t>(source_index);
+            fixed_offset = push_fixed_subobject<variant_index_t>(fixed_offset,
+                detail::bind_serialise(serialise_source<variant_index_t>{index}, buffer));
 
-            target = target.push_fixed_subobject<variant_index_t>([index](auto index_target) {
-                assert(index <= max_variant_types);
-                return serialiser<variant_index_t>{}(static_cast<variant_index_t>(index), index_target);
-            }).push_fixed_subobject<data_offset_t>([relative_variable_offset](auto offset_target) {
-                return serialiser<data_offset_t>{}(detail::to_data_offset(relative_variable_offset), offset_target);
-            });
+            auto const variable_offset = buffer.span().size();
+            auto const offset = sizeof...(Ts) > 0 ? detail::to_data_offset(variable_offset) : data_offset_t{0};
+            fixed_offset = push_fixed_subobject<data_offset_t>(fixed_offset,
+                detail::bind_serialise(serialise_source<data_offset_t>{offset}, buffer));
 
             if constexpr (sizeof...(Ts) > 0) {
-                target = std::visit([&target] <serialisable T> (serialise_source<T> const& value_source) {
-                    return target.push_variable_subobjects<T>(1, [&value_source](auto value_target) {
-                        return serialiser<T>{}(value_source, value_target);
-                    });
+                std::visit([&buffer] <serialisable T> (serialise_source<T> const& value_source) {
+                    push_variable_subobjects<T>(1, buffer, detail::bind_serialise(value_source, buffer));
                 }, source);
             }
+        }
 
-            return target;
+        static constexpr void serialise(serialise_source<variant<Ts...>> const&, mutable_bytes_span const buffer,
+                std::size_t fixed_offset) requires (sizeof...(Ts) == 0) {
+            fixed_offset = push_fixed_subobject<variant_index_t>(fixed_offset,
+                detail::bind_serialise(serialise_source<variant_index_t>{0}, buffer));
+
+            fixed_offset = push_fixed_subobject<data_offset_t>(fixed_offset,
+                detail::bind_serialise(serialise_source<data_offset_t>{0}, buffer));
         }
     };
 
@@ -99,16 +105,10 @@ namespace serialpp {
     public:
         using deserialiser_base::deserialiser_base;
 
-        constexpr deserialiser(const_bytes_span fixed_data, const_bytes_span variable_data) :
-            deserialiser_base{no_fixed_buffer_check, fixed_data, variable_data}
-        {
-            check_fixed_buffer_size<variant<Ts...>>(_fixed_data);
-        }
-
         // Gets the zero-based index of the contained type.
         [[nodiscard]]
         constexpr std::size_t index() const requires (sizeof...(Ts) > 0) {
-            return deserialiser<variant_index_t>{no_fixed_buffer_check, _fixed_data, _variable_data}.value();
+            return deserialise<variant_index_t>(_buffer, _fixed_offset);
         }
 
         // If Index == index(), gets the contained value. Otherwise, throws std::bad_variant_access.
@@ -124,8 +124,9 @@ namespace serialpp {
         }
 
         // Invokes the specified function with the contained value as the argument.
-        template<typename F> requires (std::invocable<F, auto_deserialise_t<Ts>> && ...)
-        constexpr decltype(auto) visit(F&& visitor) const {
+        template<typename F> requires (std::invocable<F, deserialise_t<Ts>> && ...)
+        constexpr decltype(auto) visit(F&& visitor) const
+                noexcept((std::is_nothrow_invocable_v<F, deserialise_t<Ts>> && ...)) {
             if constexpr (sizeof...(Ts) > 0) {
                 return _visit<0>(std::forward<F>(visitor), index());
             }
@@ -134,38 +135,31 @@ namespace serialpp {
     private:
         [[nodiscard]]
         constexpr data_offset_t _offset() const requires (sizeof...(Ts) > 0) {
-            return deserialiser<data_offset_t>{
-                no_fixed_buffer_check,
-                _fixed_data.subspan(fixed_data_size_v<variant_index_t>, fixed_data_size_v<data_offset_t>),
-                _variable_data
-            }.value();
+            return deserialise<data_offset_t>(_buffer, _fixed_offset + fixed_data_size_v<variant_index_t>);
         }
 
         // Gets the contained value by index.
         template<std::size_t Index> requires (Index < sizeof...(Ts))
         constexpr auto _get() const {
             using element_type = detail::type_list_element<type_list<Ts...>, Index>::type;
-            auto const offset = _offset();
-            _check_variable_offset(offset);
-            deserialiser<element_type> const deser{
-                _variable_data.subspan(offset, fixed_data_size_v<element_type>),
-                _variable_data
-            };
-            return auto_deserialise(deser);
+            return deserialise<element_type>(_buffer, _offset());
         }
 
         template<std::size_t I, typename F>
-            requires (sizeof...(Ts) > 0) && (std::invocable<F, auto_deserialise_t<Ts>> && ...)
-        constexpr decltype(auto) _visit(F&& visitor, std::size_t index) const {
+            requires (sizeof...(Ts) > 0) && (std::invocable<F, deserialise_t<Ts>> && ...)
+        constexpr decltype(auto) _visit(F&& visitor, std::size_t const index) const
+                noexcept((std::is_nothrow_invocable_v<F, deserialise_t<Ts>> && ...)) {
             assert(index < sizeof...(Ts));
-            if (I == index) {
-                return std::invoke(std::forward<F>(visitor), _get<I>());
+            if (I != index) {
+                if constexpr (I + 1 < sizeof...(Ts)) {
+                    return _visit<I + 1>(std::forward<F>(visitor), index);
+                }
+                else {
+                    // Unreachable.
+                    assert(false);
+                }
             }
-            else if constexpr (I + 1 < sizeof...(Ts)) {
-                return _visit<I + 1>(std::forward<F>(visitor), index);
-            }
-            // Unreachable.
-            assert(false);
+            return std::invoke(std::forward<F>(visitor), _get<I>());
         }
     };
 

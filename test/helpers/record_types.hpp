@@ -5,7 +5,7 @@
 #include <serialpp/record.hpp>
 #include <serialpp/scalar.hpp>
 
-#include "common.hpp"
+#include "mock_serialisable.hpp"
 
 
 namespace serialpp::test {

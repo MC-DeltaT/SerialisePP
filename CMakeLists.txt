@@ -20,7 +20,7 @@ if(SERIALISEPP_BUILD_TEST)
     find_package(SimpleTest 1.1.0 REQUIRED)
 
     add_executable(SerialisePPTest
-        test/test_buffer.cpp
+        test/test_buffers.cpp
         test/test_common.cpp
         test/test_compound.cpp
         test/test_dynamic_array.cpp
@@ -37,6 +37,21 @@ if(SERIALISEPP_BUILD_TEST)
     target_link_libraries(SerialisePPTest PRIVATE SerialisePP SimpleTest::SimpleTest)
     target_compile_features(SerialisePPTest PUBLIC cxx_std_23)
     set_target_properties(SerialisePPTest PROPERTIES CXX_EXTENSIONS OFF)
+endif()
+
+# Only build benchmark code if specifically requested.
+option(SERIALISEPP_BUILD_BENCHMARK "Build benchmark executable" OFF)
+if(SERIALISEPP_BUILD_BENCHMARK)
+    message("Configuring to build SerialisePPBenchmark")
+
+    add_executable(SerialisePPBenchmark
+        benchmark/helpers/utility.cpp
+        benchmark/main.cpp
+    )
+    target_include_directories(SerialisePPBenchmark PRIVATE test/)
+    target_link_libraries(SerialisePPBenchmark PRIVATE SerialisePP)
+    target_compile_features(SerialisePPBenchmark PUBLIC cxx_std_23)
+    set_target_properties(SerialisePPBenchmark PROPERTIES CXX_EXTENSIONS OFF)
 endif()
 
 # Don't configure installation if we're part of another project.

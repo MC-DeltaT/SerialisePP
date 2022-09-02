@@ -2,9 +2,11 @@
 
 #include <algorithm>
 #include <bit>
+#include <cassert>
 #include <concepts>
 #include <cstddef>
 #include <functional>
+#include <memory>
 #include <new>
 #include <string_view>
 #include <type_traits>
@@ -64,7 +66,7 @@ namespace serialpp {
     namespace detail {
 
         // Gets the type at the specified index of a type_list.
-        // If Index is out of bounds, a compile error occurs.
+        // If Index is out of bounds, the usage is ill-formed.
         template<class TList, std::size_t Index> requires (Index < TList::size)
         struct type_list_element : type_list_element<typename TList::tail, Index - 1> {};
 
@@ -74,18 +76,11 @@ namespace serialpp {
 
         // Checks if a type_list contains a specified type.
         template<class TList, typename T>
-        [[nodiscard]]
-        consteval bool type_list_contains() noexcept {
-            if constexpr (TList::size == 0) {
-                return false;
-            }
-            else if constexpr (std::same_as<typename TList::head, T>) {
-                return true;
-            }
-            else {
-                return type_list_contains<typename TList::tail, T>();
-            }
-        }
+        inline constexpr bool type_list_contains =
+            std::same_as<typename TList::head, T> || type_list_contains<typename TList::tail, T>;
+
+        template<typename T>
+        inline constexpr bool type_list_contains<type_list<>, T> = false;
 
 
         // Adds a type to the beginning of a type_list.
@@ -96,6 +91,7 @@ namespace serialpp {
         struct type_list_prepend<T, type_list<Ts...>> : std::type_identity<type_list<T, Ts...>> {};
 
 
+        // Joins two type_list to a single type_list.
         template<class TList1, class TList2>
         struct type_list_concat;
 
@@ -108,13 +104,82 @@ namespace serialpp {
         using size_t_constant = std::integral_constant<std::size_t, Value>;
 
 
-        template<typename T, typename Return, typename... Args>
-        concept function = std::invocable<T, Args...> && std::same_as<Return, std::invoke_result_t<T, Args...>>;
+        inline constexpr bool is_little_endian = std::endian::native == std::endian::little;
+        inline constexpr bool is_big_endian = std::endian::native == std::endian::big;
+        inline constexpr bool is_mixed_endian = !is_little_endian && !is_big_endian;
 
 
-        static inline constexpr bool is_little_endian = std::endian::native == std::endian::little;
-        static inline constexpr bool is_big_endian = std::endian::native == std::endian::big;
-        static inline constexpr bool is_mixed_endian = !is_little_endian && !is_big_endian;
+        // Saddeningly, this isn't in the Standard Library yet.
+        template<typename T> requires std::is_object_v<T>
+        class constexpr_unique_ptr {
+        public:
+            using pointer = std::remove_extent_t<T>*;
+
+            constexpr constexpr_unique_ptr() noexcept :
+                _pointer{nullptr}
+            {}
+
+            explicit constexpr constexpr_unique_ptr(pointer const ptr) noexcept :
+                _pointer{ptr}
+            {}
+
+            constexpr constexpr_unique_ptr(constexpr_unique_ptr&& other) noexcept :
+                _pointer{std::exchange(other._pointer, nullptr)}
+            {}
+
+            constexpr_unique_ptr(constexpr_unique_ptr const&) = delete;
+
+            constexpr ~constexpr_unique_ptr() {
+                _delete();
+            }
+
+            constexpr constexpr_unique_ptr& operator=(constexpr_unique_ptr other) noexcept {
+                swap(*this, other);
+                return *this;
+            }
+
+            constexpr constexpr_unique_ptr& operator=(std::nullptr_t) noexcept {
+                _delete();
+                return *this;
+            }
+
+            [[nodiscard]]
+            constexpr pointer get() const noexcept {
+                return _pointer;
+            }
+
+            constexpr void reset(pointer const ptr = nullptr) noexcept {
+                _delete();
+                _pointer = ptr;
+            }
+
+            constexpr T& operator*() const requires !std::is_array_v<T> {
+                assert(_pointer);
+                return *_pointer;
+            }
+
+            constexpr pointer operator->() const noexcept {
+                return _pointer;
+            }
+
+            explicit constexpr operator bool() const noexcept {
+                return _pointer != nullptr;
+            }
+
+            friend constexpr void swap(constexpr_unique_ptr& first, constexpr_unique_ptr& second) noexcept {
+                using std::swap;
+                swap(first._pointer, second._pointer);
+            }
+
+        private:
+            pointer _pointer;
+
+            constexpr void _delete() noexcept {
+                if (_pointer) {
+                    std::default_delete<T>{}(_pointer);
+                }
+            }
+        };
 
 
         // Wrapper for a small value of any type (to avoid allocating on the heap), with support for visiting the value.
@@ -135,7 +200,7 @@ namespace serialpp {
             // Checks if this type can contain a given type.
             template<typename T>
             static consteval bool can_contain() noexcept {
-                return std::is_object_v<T> && std::move_constructible<T> && std::invocable<Visitor, T const&>
+                return std::is_object_v<T> && std::move_constructible<T> && std::invocable<Visitor&, T const&>
                     && storage_compatible_with<T>();
             }
 
@@ -145,15 +210,11 @@ namespace serialpp {
                 _visitor_func{nullptr}
             {}
 
-            constexpr ~small_any() {
-                _destruct();
-            }
-
             small_any(small_any&& other) :
                 _visitor_func{other._visitor_func}
             {
-                if (other._visitor_func) {
-                    other._visitor_func(other._data, _visit_operation::move_construct, _data);
+                if (_visitor_func) {
+                    _visitor_func(_data, _visit_operation::move_construct, other._data);
 
                     // Do this last so we get strong exception guarantee.
                     other._visitor_func = nullptr;
@@ -162,12 +223,16 @@ namespace serialpp {
 
             small_any(small_any const&) = delete;
 
+            constexpr ~small_any() {
+                _destruct();
+            }
+
             small_any& operator=(small_any&&) = delete;
             small_any& operator=(small_any const&) = delete;
 
             // Construct from a type and its constructor arguments.
             template<typename T, typename... Args> requires (can_contain<T>()) && std::constructible_from<T, Args...>
-            void emplace(Args&&... args) noexcept(std::is_nothrow_constructible<T, Args...>) {
+            void emplace(Args&&... args) noexcept(std::is_nothrow_constructible_v<T, Args...>) {
                 _destruct();
                 new(_data) T(std::forward<Args>(args)...);
                 _visitor_func = &_generic_visitor_func<T>;
@@ -176,7 +241,7 @@ namespace serialpp {
             // Construct using a provided function that does custom construction of the contained object.
             template<std::invocable<void*> F, typename T = std::remove_pointer_t<std::invoke_result_t<F, void*>>>
                 requires (can_contain<T>())
-            void emplace(F&& constructor) noexcept(std::is_nothrow_invocable<F, void*>) {
+            void emplace(F&& constructor) noexcept(std::is_nothrow_invocable_v<F, void*>) {
                 _destruct();
                 std::invoke(std::forward<F>(constructor), static_cast<void*>(_data));
                 _visitor_func = &_generic_visitor_func<T>;
@@ -207,15 +272,16 @@ namespace serialpp {
                 }
             }
 
-            template<typename T> requires std::invocable<Visitor, T const&>
-            static void _generic_visitor_func(void const* data, _visit_operation operation, void* arg) {
+            template<typename T> requires std::invocable<Visitor&, T const&>
+            static void _generic_visitor_func(void const* const data, _visit_operation const operation,
+                    void* const arg) {
                 switch (operation) {
                 case _visit_operation::destruct:
                     static_cast<T const*>(data)->~T();
                     break;
                 case _visit_operation::move_construct:
                     // Will be inside the move constructor, thus data will always be nonconst.
-                    new(arg) T{std::move(*static_cast<T*>(const_cast<void*>(data)))};
+                    new(const_cast<void*>(data)) T{std::move(*static_cast<T*>(arg))};
                     break;
                 case _visit_operation::visit:
                     std::invoke(*static_cast<Visitor*>(arg), *static_cast<T const*>(data));

@@ -1,11 +1,10 @@
 #pragma once
 
+#include <cassert>
 #include <concepts>
-#include <typeinfo>
+#include <cstddef>
 #include <type_traits>
 #include <utility>
-
-#include <serialpp/utility.hpp>
 
 
 namespace serialpp::test {
@@ -55,7 +54,7 @@ namespace serialpp::test {
 
         constexpr lifecycle_observer& operator=(lifecycle_observer&& other)
                 noexcept(std::is_nothrow_move_assignable_v<T>) {
-            // Assume _lifecycle == other._lifecycle
+            assert(_lifecycle == other._lifecycle);
             ++_lifecycle->move_assigns;
             value = std::move(other.value);
             return *this;
@@ -63,7 +62,7 @@ namespace serialpp::test {
 
         constexpr lifecycle_observer& operator=(lifecycle_observer const& other)
                 noexcept(std::is_nothrow_copy_assignable_v<T>) {
-            // Assume _lifecycle == other._lifecycle
+            assert(_lifecycle == other._lifecycle);
             ++_lifecycle->copy_assigns;
             value = other.value;
             return *this;
@@ -81,18 +80,4 @@ namespace serialpp::test {
         lifecycle_data* _lifecycle;
     };
 
-
-    template<typename T>
-    struct mock_small_any_visitor {
-        T const* value = nullptr;
-        std::type_info const* type = nullptr;
-
-        template<typename T>
-        void operator()(T&& value) {
-            this->value = &value;
-            type = &typeid(T);
-        }
-    };
-
 }
-

@@ -1,63 +1,62 @@
 #include <array>
+#include <concepts>
 #include <cstddef>
 #include <cstdint>
+#include <vector>
 
-#include <serialpp/buffer.hpp>
+#include <serialpp/buffers.hpp>
 #include <serialpp/common.hpp>
 #include <serialpp/scalar.hpp>
 #include <serialpp/tuple.hpp>
 
-#include "helpers/common.hpp"
+#include "helpers/buffer_utility.hpp"
+#include "helpers/mock_serialisable.hpp"
 #include "helpers/test.hpp"
 
 
 namespace serialpp::test {
 test_block tuple_tests = [] {
 
+    static_assert(fixed_size_serialisable<tuple<>>);
+    static_assert(fixed_size_serialisable<tuple<unsigned, mock_serialisable<32, false>, std::int16_t>>);
+    static_assert(variable_size_serialisable<tuple<int, char, mock_serialisable<1, true>>>);
     static_assert(fixed_data_size_v<tuple<>> == 0);
-    static_assert(fixed_data_size_v<tuple<std::uint32_t, float, mock_serialisable<14>>> == 22);
+    static_assert(fixed_data_size_v<tuple<std::uint32_t, std::byte, mock_serialisable<14>>> == 19);
+
+    static_assert(std::semiregular<serialise_source<tuple<>>>);
+    static_assert(std::semiregular<serialise_source<tuple<std::uint16_t, std::int16_t>>>);
 
     test_case("serialiser tuple empty") = [] {
-        basic_serialise_buffer buffer;
-        serialise_target<basic_serialise_buffer<>> const target = initialise_buffer<tuple<>>(buffer);
+        basic_buffer buffer;
+        buffer.initialise(0);
         serialise_source<tuple<>> const source;
-        serialiser<tuple<>> const ser;
-        serialise_target<basic_serialise_buffer<>> const new_target = ser(source, target);
-
-        serialise_target const expected_new_target{buffer, 0, 0, 0, 0};
-        test_assert(new_target == expected_new_target);
+        serialiser<tuple<>>::serialise(source, buffer, 0);
         std::array<unsigned char, 0> const expected_buffer{};
         test_assert(buffer_equal(buffer, expected_buffer));
     };
 
     test_case("serialiser tuple mocks") = [] {
         using type = tuple<mock_serialisable<14>, mock_serialisable<6>, mock_serialisable<8>>;
-        basic_serialise_buffer buffer;
-        serialise_target<basic_serialise_buffer<>> const target = initialise_buffer<type>(buffer);
+        basic_buffer buffer;
+        buffer.initialise(28);
         serialise_source<type> const source;
-        serialiser<type> const ser;
-        serialise_target<basic_serialise_buffer<>> const new_target = ser(source, target);
+        serialiser<type>::serialise(source, buffer, 0);
 
-        serialise_target const expected_new_target{buffer, 28, 28, 0, 28};
-        test_assert(new_target == expected_new_target);
-        test_assert(std::get<0>(source).targets.size() == 1);
-        test_assert(std::get<0>(source).targets.at(0) == serialise_target{buffer, 28, 0, 14, 28});
-        test_assert(std::get<1>(source).targets.size() == 1);
-        test_assert(std::get<1>(source).targets.at(0) == serialise_target{buffer, 28, 14, 6, 28});
-        test_assert(std::get<2>(source).targets.size() == 1);
-        test_assert(std::get<2>(source).targets.at(0) == serialise_target{buffer, 28, 20, 8, 28});
+        test_assert(std::get<0>(source).buffers == std::vector{&buffer});
+        test_assert(std::get<0>(source).fixed_offsets == std::vector<std::size_t>{0});
+        test_assert(std::get<1>(source).buffers == std::vector{&buffer});
+        test_assert(std::get<1>(source).fixed_offsets == std::vector<std::size_t>{14});
+        test_assert(std::get<2>(source).buffers == std::vector{&buffer});
+        test_assert(std::get<2>(source).fixed_offsets == std::vector<std::size_t>{20});
     };
 
     test_case("serialiser tuple scalars") = [] {
         using type = tuple<std::uint8_t, std::uint8_t, std::int32_t>;
-        basic_serialise_buffer buffer;
-        serialise_target<basic_serialise_buffer<>> const target = initialise_buffer<type>(buffer);
+        basic_buffer buffer;
+        buffer.initialise(6);
         serialise_source<type> const source{86, 174, 23'476'598};
-        serialiser<type> const ser;
-        serialise_target<basic_serialise_buffer<>> const new_target = ser(source, target);
+        serialiser<type>::serialise(source, buffer, 0);
 
-        serialise_target const expected_new_target{buffer, 6, 6, 0, 6};
-        test_assert(new_target == expected_new_target);
         std::array<unsigned char, 6> const expected_buffer{
             0x56,           // element 0
             0xAE,           // element 1
@@ -68,21 +67,21 @@ test_block tuple_tests = [] {
 
     test_case("deserialiser tuple empty") = [] {
         std::array<std::byte, 0> const buffer{};
-        deserialiser<tuple<>> const deser = deserialise<tuple<>>(buffer);
+        deserialiser<tuple<>> const deser{const_bytes_span{buffer}, 0};
     };
 
     test_case("deserialiser tuple mocks") = [] {
         using type = tuple<mock_serialisable<24>, mock_serialisable<58>, mock_serialisable<8>, mock_serialisable<69>>;
         std::array<std::byte, 216> const buffer{};
-        deserialiser<type> const deser = deserialise<type>(buffer);
-        test_assert(bytes_view_same(deser.get<0>()._fixed_data, const_bytes_span{buffer.data(), 24}));
-        test_assert(bytes_view_same(deser.get<0>()._variable_data, const_bytes_span{buffer.data() + 159, 57}));
-        test_assert(bytes_view_same(deser.get<1>()._fixed_data, const_bytes_span{buffer.data() + 24, 58}));
-        test_assert(bytes_view_same(deser.get<1>()._variable_data, const_bytes_span{buffer.data() + 159, 57}));
-        test_assert(bytes_view_same(deser.get<2>()._fixed_data, const_bytes_span{buffer.data() + 82, 8}));
-        test_assert(bytes_view_same(deser.get<2>()._variable_data, const_bytes_span{buffer.data() + 159, 57}));
-        test_assert(bytes_view_same(deser.get<3>()._fixed_data, const_bytes_span{buffer.data() + 90, 69}));
-        test_assert(bytes_view_same(deser.get<3>()._variable_data, const_bytes_span{buffer.data() + 159, 57}));
+        deserialiser<type> const deser{const_bytes_span{buffer}, 0};
+        test_assert(bytes_span_same(deser.get<0>()._buffer, const_bytes_span{buffer}));
+        test_assert(deser.get<0>()._fixed_offset == 0);
+        test_assert(bytes_span_same(deser.get<1>()._buffer, const_bytes_span{buffer}));
+        test_assert(deser.get<1>()._fixed_offset == 24);
+        test_assert(bytes_span_same(deser.get<2>()._buffer, const_bytes_span{buffer}));
+        test_assert(deser.get<2>()._fixed_offset == 82);
+        test_assert(bytes_span_same(deser.get<3>()._buffer, const_bytes_span{buffer}));
+        test_assert(deser.get<3>()._fixed_offset == 90);
     };
 
     test_case("deserialiser tuple scalars") = [] {
@@ -92,7 +91,7 @@ test_block tuple_tests = [] {
             0x37, 0x45, 0x0A, 0x5B      // element 2
         };
         using type = tuple<std::int64_t, std::int16_t, std::uint32_t>;
-        deserialiser<type> const deser = deserialise<type>(as_const_bytes_span(buffer));
+        deserialiser<type> const deser{as_const_bytes_span(buffer), 0};
         test_assert(deser.get<0>() == -7'132'294'434'499'804'710ll);
         test_assert(deser.get<1>() == 21213);
         test_assert(deser.get<2>() == 1'527'399'735);

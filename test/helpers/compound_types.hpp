@@ -26,6 +26,7 @@ namespace serialpp::test {
             variant<compound_test_record2, compound_test_record1>>>
     > {};
 
+    // TODO: add dynamic_array when compilers aren't broken
     struct constexpr_test_record : record<
         field<"i32", std::int32_t>,
         field<"pair_u16_i8", pair<std::uint16_t, std::int8_t>>,

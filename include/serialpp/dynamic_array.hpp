@@ -7,16 +7,15 @@
 #include <cstddef>
 #include <cstdint>
 #include <format>
-#include <iterator>
 #include <limits>
 #include <memory>
 #include <new>
-#include <optional>
 #include <ranges>
 #include <stdexcept>
 #include <type_traits>
 #include <utility>
 
+#include "buffers.hpp"
 #include "common.hpp"
 #include "scalar.hpp"
 #include "utility.hpp"
@@ -27,15 +26,14 @@ namespace serialpp {
     /*
         dynamic_array:
             Fixed data is an element count (dynamic_array_size_t) and an offset (data_offset_t).
-            If the element count is > 0, then that many elements are contained starting at the offset in the variable
-            data section.
-            If the element count is 0, then the offset is unused and no variable data is present.
+            If the element count is > 0, then that many elements are contained starting at the offset.
+            If the element count is 0, then the offset is not significant and no variable data is present.
     */
 
 
     using dynamic_array_size_t = std::uint32_t;
 
-    static inline constexpr std::size_t max_dynamic_array_size = std::numeric_limits<dynamic_array_size_t>::max();
+    inline constexpr std::size_t max_dynamic_array_size = std::numeric_limits<dynamic_array_size_t>::max();
 
 
     namespace detail {
@@ -43,7 +41,7 @@ namespace serialpp {
         // Safely casts to dynamic_array_size_t. Throws object_size_error if the value is too big to be stored in a
         // dynamic_array_size_t.
         [[nodiscard]]
-        inline dynamic_array_size_t to_dynamic_array_size(std::size_t size) {
+        constexpr dynamic_array_size_t to_dynamic_array_size(std::size_t const size) {
             if (std::cmp_less_equal(size, max_dynamic_array_size)) {
                 return static_cast<dynamic_array_size_t>(size);
             }
@@ -59,9 +57,7 @@ namespace serialpp {
     // Serialisable variable-length homogeneous array. Can hold up to max_dynamic_array_size elements.
     template<serialisable T>
     struct dynamic_array {
-        using size_type = dynamic_array_size_t;
-
-        static constexpr std::size_t max_size = max_dynamic_array_size;
+        using element_type = T;
     };
 
 
@@ -78,7 +74,6 @@ namespace serialpp {
     template<serialisable T>
     class serialise_source<dynamic_array<T>> {
     public:
-        // TODO: copyable?
         // TODO: move assignable?
 
         // Constructs with zero elements.
@@ -101,9 +96,9 @@ namespace serialpp {
                 }
                 else {
                     // If the array is small enough, put it in the inline buffer.
-                    if constexpr (_inline_range_buffer::template storage_compatible_with<range_type>()) {
+                    if constexpr (_inline_range_buffer::template can_contain<range_type>()) {
                         [this, &elements] <std::size_t... Is> (std::index_sequence<Is...>) {
-                            _range.inline_buffer().emplace([&elements](void* data) {
+                            _range.inline_buffer().emplace([&elements](void* const data) {
                                 return new(data) range_type{{std::move(elements[Is])...}};
                             });
                         }(std::make_index_sequence<N>{});
@@ -126,7 +121,7 @@ namespace serialpp {
         constexpr serialise_source(R&& range) :
             _range{}
         {
-            assert(std::size(range) <= max_dynamic_array_size);
+            assert(std::ranges::size(range) <= max_dynamic_array_size);
 
             using range_type = std::ranges::views::all_t<R>;
             // If we're owning the elements and the range is empty, don't bother storing it.
@@ -136,7 +131,7 @@ namespace serialpp {
                     _range.set_constexpr_wrapper(new _alloc_range_wrapper<range_type>{std::forward<R>(range)});
                 }
                 // If the range object is small enough, put it in the inline buffer.
-                else if constexpr (_inline_range_buffer::template storage_compatible_with<range_type>()) {
+                else if constexpr (_inline_range_buffer::template can_contain<range_type>()) {
                     _range.inline_buffer().emplace<range_type>(std::forward<R>(range));
                 }
                 // Otherwise have to dynamically allocate space to type-erase the range.
@@ -148,71 +143,23 @@ namespace serialpp {
         }
 
     private:
-        class _element_visitor_base {
-        public:
-            // No virtual destructor because it's not destructed polymorphically.
-
-            // Called before iterating the range with the reported size of the range.
-            virtual constexpr void initialise(std::size_t element_count) = 0;
-
-            // Called for each element in the range.
-            virtual constexpr void visit_element(serialise_source<T> const& element) = 0;
-        };
-
-        template<serialise_buffer Buffer>
-        class _element_visitor final : public _element_visitor_base {
-        public:
-            serialise_target<Buffer> target;
-            std::optional<serialise_target<Buffer>> elements_target;
-            serialise_target<Buffer>::push_variable_subobjects_context push_elements_context;
-
-            explicit constexpr _element_visitor(serialise_target<Buffer> target) noexcept :
-                target{target}, elements_target{std::nullopt}, push_elements_context{}
-            {}
-
-            constexpr void initialise(std::size_t element_count) final {
-                auto const [elems_target, context] = target.enter_variable_subobjects<T>(element_count);
-                elements_target = elems_target;
-                push_elements_context = context;
-            }
-
-            constexpr void visit_element(serialise_source<T> const& element) final {
-                assert(elements_target.has_value());
-                elements_target = elements_target->push_fixed_subobject<T>(
-                    [&element](serialise_target<Buffer> element_target) {
-                        return serialiser<T>{}(element, element_target);
-                    });
-            }
-
-            constexpr serialise_target<Buffer> finalise() const {
-                // If the serialise_source is default constructed, then no range gets visited.
-                if (elements_target.has_value()) {
-                    return elements_target->exit_variable_subobjects(push_elements_context);
-                }
-                else {
-                    return target;
-                }
-            }
-        };
-
         struct _range_visitor {
-            _element_visitor_base* elem_visitor;
+            detail::devirtualised_virtual_buffer& buffer;
             std::size_t element_count = 0;
 
-            template<dynamic_array_serialise_source_range<T> R>
-            constexpr void operator()(R& range) {
+            constexpr void operator()(dynamic_array_serialise_source_range<T> auto& range) {
                 std::unsigned_integral auto const count = std::ranges::size(range);
-                // Keep track of real count if for some bizarre reason range size is wrong.
-                std::size_t actual_count = 0;
-                elem_visitor->initialise(count);
-                std::forward_iterator auto element_it = std::ranges::begin(range);
-                std::sentinel_for<decltype(element_it)> auto const end_it = std::ranges::end(range);
-                while (actual_count < count && element_it != end_it) {
-                    elem_visitor->visit_element(*element_it);
-                    ++actual_count;
-                    ++element_it;
-                }
-                element_count = actual_count;
+                element_count = count;
+                push_variable_subobjects<T>(count, buffer, [this, &range](std::size_t const elements_fixed_offset_) {
+                    with_buffer_for<T>(buffer, [elements_fixed_offset_, &range](auto&& buffer) {
+                        // Local copy - mutating a lambda capture seems to inhibit optimisation.
+                        auto elements_fixed_offset = elements_fixed_offset_;
+                        for (serialise_source<T> const& element : range) {
+                            elements_fixed_offset = push_fixed_subobject<T>(elements_fixed_offset,
+                                detail::bind_serialise(element, buffer));
+                        }
+                    });
+                });
             }
         };
 
@@ -238,7 +185,7 @@ namespace serialpp {
             }
         };
 
-        using _alloc_range_wrapper_base_ptr = std::unique_ptr<_alloc_range_wrapper_base const>;
+        using _alloc_range_wrapper_base_ptr = detail::constexpr_unique_ptr<_alloc_range_wrapper_base const>;
 
         struct _range_wrapper_visitor : _range_visitor {
             using _range_visitor::operator();
@@ -249,12 +196,12 @@ namespace serialpp {
             }
         };
 
-        static inline constexpr std::size_t _inline_buffer_size = std::max<std::size_t>(
+        static constexpr std::size_t _inline_buffer_size = std::max<std::size_t>(
             sizeof(_alloc_range_wrapper_base_ptr),      // Almost certainly <= 24 bytes.
             24      // Size of std::vector on GCC, Clang, and MSVC.
         );
 
-        static inline constexpr std::size_t _inline_buffer_align = std::max<std::size_t>(
+        static constexpr std::size_t _inline_buffer_align = std::max<std::size_t>(
             alignof(_alloc_range_wrapper_base_ptr),     // Likely 8 on 64-bit platforms.
             8       // Alignment of std::vector on 64-bit GCC, Clang, and MSVC.
         );
@@ -268,8 +215,8 @@ namespace serialpp {
         // because you can't reinterpret_cast pointers nor use placement new at compile time.
         // The solution is to forget the small object optimisation and always type erase via dynamic allocation when in
         // compile time.
-        // Hence this class, which wraps a union of a small_any and unique_ptr. At compile time, the unique_ptr is
-        // active. At runtime, the small_any is active. There's no memory nor runtime overhead.
+        // Hence this class, which wraps a union of a small_any and constexpr_unique_ptr. At compile time, the
+        // constexpr_unique_ptr is active. At runtime, the small_any is active. There's no memory nor runtime overhead.
         // But what if the serialise_source is constructed at compile time and used at runtime? The union will have the
         // wronge type! Well, that's impossible, because compile time dynamic allocations cannot escape compile time.
         class _range_wrapper {
@@ -278,11 +225,12 @@ namespace serialpp {
                 _inline_buffer{}
             {
                 if (std::is_constant_evaluated()) {
-                    _inline_buffer.~small_any();
+                    _inline_buffer.~_inline_range_buffer();
 
                     // Need to do dynamic allocation to prevent constexpr default constructed instance from being used
                     // at runtime (because we wouldn't know which union member is active).
-                    _constexpr_wrapper = new _alloc_range_wrapper<std::ranges::empty_view<serialise_source<T>>>{};
+                    std::construct_at(&_constexpr_wrapper,
+                        new _alloc_range_wrapper<std::ranges::empty_view<serialise_source<T>>>{});
                 }
             }
 
@@ -290,8 +238,8 @@ namespace serialpp {
                 _inline_buffer{std::move(other._inline_buffer)}
             {
                 if (std::is_constant_evaluated()) {
-                    _inline_buffer.~small_any();
-                    _constexpr_wrapper = std::exchange(other._constexpr_wrapper, nullptr);
+                    _inline_buffer.~_inline_range_buffer();
+                    new(&_constexpr_wrapper) auto(std::move(other._constexpr_wrapper));
                 }
             }
 
@@ -299,12 +247,10 @@ namespace serialpp {
 
             constexpr ~_range_wrapper() {
                 if (std::is_constant_evaluated()) {
-                    if (_constexpr_wrapper) {
-                        delete _constexpr_wrapper;
-                    }
+                    _constexpr_wrapper.~_alloc_range_wrapper_base_ptr();
                 }
                 else {
-                    _inline_buffer.~small_any();
+                    _inline_buffer.~_inline_range_buffer();
                 }
             }
 
@@ -321,46 +267,49 @@ namespace serialpp {
                 return _inline_buffer;
             }
 
-            constexpr _alloc_range_wrapper_base const* constexpr_wrapper() const {
+            constexpr _alloc_range_wrapper_base const& constexpr_wrapper() const {
                 assert(std::is_constant_evaluated());
-                return _constexpr_wrapper;
+                return *_constexpr_wrapper;
             }
 
-            constexpr void set_constexpr_wrapper(_alloc_range_wrapper_base const* ptr) {
+            constexpr void set_constexpr_wrapper(_alloc_range_wrapper_base const* const ptr) {
                 assert(std::is_constant_evaluated());
-                delete _constexpr_wrapper;
-                _constexpr_wrapper = ptr;
+                _constexpr_wrapper.reset(ptr);
             }
-        
+
         private:
             union {
-                _inline_range_buffer _inline_buffer;                    // Active if constructed at runtime.
-                _alloc_range_wrapper_base const* _constexpr_wrapper;    // Active if constructed at compile time
+                // Active if constructed at runtime.
+                _inline_range_buffer _inline_buffer;
+                // Active if constructed at compile time.
+                _alloc_range_wrapper_base_ptr _constexpr_wrapper;
             };
         };
 
         _range_wrapper _range;
 
+        // Returns the number of elements serialised.
         template<serialise_buffer Buffer>
-        constexpr std::pair<std::size_t, serialise_target<Buffer>> _serialise_elements(
-                serialise_target<Buffer> target) const {
-            // To serialise the elements, we need this double visitor process, because there are two type parameters:
-            // the range type, and the serialise buffer type.
-            // First we visit the range, and iterate its elements. Within the range visitor, the serialise buffer type
-            // cannot be known, because the range visitor is instantiated before this function is called.
-            // However we do know the range element type in advance, so we can virtual call each element into another
-            // visitor that knows the serialise buffer type.
+        constexpr std::size_t _serialise_elements(Buffer& buffer) const {
+            auto const visit = [this](detail::devirtualised_virtual_buffer& buffer) {
+                _range_wrapper_visitor range_visitor{buffer};
+                if (std::is_constant_evaluated()) {
+                    _range.constexpr_wrapper().visit(range_visitor);
+                }
+                else {
+                    _range.inline_buffer().visit(range_visitor);
+                }
+                return range_visitor.element_count;
+            };
 
-            _element_visitor elem_visitor{target};
-            _range_wrapper_visitor rng_visitor{&elem_visitor};
-            if (std::is_constant_evaluated()) {
-                _range.constexpr_wrapper()->visit(rng_visitor);
+            if constexpr (std::same_as<std::remove_cvref_t<Buffer>, detail::devirtualised_virtual_buffer>) {
+                return visit(buffer);
             }
             else {
-                _range.inline_buffer().visit(rng_visitor);
+                detail::virtual_buffer_impl virtual_buffer{buffer};
+                detail::devirtualised_virtual_buffer devirtualised_buffer{virtual_buffer};
+                return visit(devirtualised_buffer);
             }
-            auto const new_target = elem_visitor.finalise();
-            return {rng_visitor.element_count, new_target};
         }
 
         friend struct serialiser<dynamic_array<T>>;
@@ -368,18 +317,20 @@ namespace serialpp {
 
     template<serialisable T>
     struct serialiser<dynamic_array<T>> {
-        template<serialise_buffer Buffer>
-        constexpr serialise_target<Buffer> operator()(serialise_source<dynamic_array<T>> const& source,
-                serialise_target<Buffer> target) const {
-            auto const relative_variable_offset = target.relative_subobject_variable_offset();
+        static constexpr void serialise(serialise_source<dynamic_array<T>> const& source, serialise_buffer auto& buffer,
+                std::size_t fixed_offset) {
+            // Must check this first in case elements use variable data.
+            auto const variable_offset = buffer.span().size();
 
-            auto const [element_count, new_target] = source._serialise_elements(target);
+            auto const element_count = source._serialise_elements(buffer);
 
-            return new_target.push_fixed_subobject<dynamic_array_size_t>([element_count](auto size_target) {
-                return serialiser<dynamic_array_size_t>{}(detail::to_dynamic_array_size(element_count), size_target);
-            }).push_fixed_subobject<data_offset_t>([relative_variable_offset](auto offset_target) {
-                return serialiser<data_offset_t>{}(detail::to_data_offset(relative_variable_offset), offset_target);
-            });
+            auto const size = detail::to_dynamic_array_size(element_count);
+            fixed_offset = push_fixed_subobject<dynamic_array_size_t>(fixed_offset,
+                detail::bind_serialise(serialise_source<dynamic_array_size_t>{size}, buffer));
+
+            auto const offset = element_count > 0 ? detail::to_data_offset(variable_offset) : data_offset_t{0};
+            fixed_offset = push_fixed_subobject<data_offset_t>(fixed_offset,
+                detail::bind_serialise(serialise_source<data_offset_t>{offset}, buffer));
         }
     };
 
@@ -388,16 +339,10 @@ namespace serialpp {
     public:
         using deserialiser_base::deserialiser_base;
 
-        constexpr deserialiser(const_bytes_span fixed_data, const_bytes_span variable_data) :
-            deserialiser_base{no_fixed_buffer_check, fixed_data, variable_data}
-        {
-            check_fixed_buffer_size<dynamic_array<T>>(_fixed_data);
-        }
-
         // Gets the number of elements in the dynamic_array.
         [[nodiscard]]
         constexpr std::size_t size() const {
-            return deserialiser<dynamic_array_size_t>{no_fixed_buffer_check, _fixed_data, _variable_data}.value();
+            return deserialise<dynamic_array_size_t>(_buffer, _fixed_offset);
         }
 
         // Checks if the dynamic_array contains zero elements.
@@ -408,37 +353,31 @@ namespace serialpp {
 
         // Gets the element at the specified index. index must be < size().
         [[nodiscard]]
-        constexpr auto_deserialise_t<T> operator[](std::size_t index) const {
+        constexpr deserialise_t<T> operator[](std::size_t const index) const {
             assert(index < size());
-            auto const base_offset = _offset();
-            auto const element_offset = base_offset + fixed_data_size_v<T> * index;
-            _check_variable_offset(element_offset);
-            deserialiser<T> const deser{
-                _variable_data.subspan(element_offset, fixed_data_size_v<T>),
-                _variable_data
-            };
-            return auto_deserialise(deser);
+            auto const element_offset = _offset() + fixed_data_size_v<T> * index;
+            return deserialise<T>(_buffer, element_offset);
         }
 
         // Gets the element at the specified index. Throws std::out_of_range if index is out of bounds.
         [[nodiscard]]
-        constexpr auto_deserialise_t<T> at(std::size_t index) const {
+        constexpr deserialise_t<T> at(std::size_t const index) const {
             auto const size = this->size();
             if (index < size) {
                 return (*this)[index];
             }
             else {
                 throw std::out_of_range{
-                    std::format("dynamic_array index {} is out of bounds for size {}", index, size)};
+                    std::format("index {} is out of bounds for dynamic_array with size {}", index, size)};
             }
         }
 
         // Gets a view of the elements.
-        // The returned view references this deserialiser instance cannot outlive it.
+        // The returned view references this deserialiser instance, so cannot outlive it.
         [[nodiscard]]
         constexpr std::ranges::random_access_range auto elements() const {
             return std::ranges::views::iota(std::size_t{0}, size())
-                | std::ranges::views::transform([this](std::size_t index) {
+                | std::ranges::views::transform([this](std::size_t const index) {
                     return (*this)[index];
                 });
         }
@@ -446,11 +385,7 @@ namespace serialpp {
     private:
         [[nodiscard]]
         constexpr data_offset_t _offset() const {
-            return deserialiser<data_offset_t>{
-                no_fixed_buffer_check,
-                _fixed_data.subspan(fixed_data_size_v<dynamic_array_size_t>, fixed_data_size_v<data_offset_t>),
-                _variable_data
-            }.value();
+            return deserialise<data_offset_t>(_buffer, _fixed_offset + fixed_data_size_v<dynamic_array_size_t>);
         }
     };
 

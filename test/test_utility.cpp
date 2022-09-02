@@ -10,8 +10,9 @@
 
 #include <serialpp/utility.hpp>
 
+#include "helpers/lifecycle.hpp"
+#include "helpers/mock_small_any_visitor.hpp"
 #include "helpers/test.hpp"
-#include "helpers/utility.hpp"
 
 
 namespace serialpp::test {
@@ -39,12 +40,126 @@ test_block utility_tests = [] {
     };
 
 
-    static_assert(
-        !detail::small_any<3, 8, mock_small_any_visitor<std::uint64_t>>::storage_compatible_with<std::uint64_t>());
-    static_assert(
-        !detail::small_any<8, 1, mock_small_any_visitor<std::uint64_t>>::storage_compatible_with<std::uint64_t>());
-    static_assert(
-        detail::small_any<8, 8, mock_small_any_visitor<std::uint64_t>>::storage_compatible_with<std::uint64_t>());
+    test_case("constexpr_unique_ptr default construct") = [] {
+        []() consteval {
+            detail::constexpr_unique_ptr<int> pointer;
+            test_assert(pointer.get() == nullptr);
+            test_assert(pointer.operator->() == nullptr);
+            test_assert(!pointer);
+        }();
+    };
+
+    test_case("constexpr_unique_ptr construct destruct object") = [] {
+        []() consteval {
+            lifecycle_data lifecycle;
+            {
+                auto const o = new lifecycle_observer<int>{lifecycle, 42};
+                detail::constexpr_unique_ptr<lifecycle_observer<int>> pointer{o};
+                test_assert(pointer.get() == o);
+                test_assert(pointer.operator->() == o);
+                test_assert((*pointer).value == 42);
+                test_assert(static_cast<bool>(pointer));
+                test_assert(lifecycle == lifecycle_data{.constructs = 1});
+            }
+            test_assert(lifecycle == lifecycle_data{.constructs = 1, .destructs = 1});
+        }();
+    };
+
+    test_case("constexpr_unique_ptr construct destruct array") = [] {
+        []() consteval {
+            lifecycle_data lifecycle1;
+            lifecycle_data lifecycle2;
+            {
+                auto const o = new lifecycle_observer<int>[2]{{lifecycle1, 1}, {lifecycle2, 2}};
+                detail::constexpr_unique_ptr<lifecycle_observer<int>[]> pointer{o};
+                test_assert(pointer.get() == o);
+                test_assert(lifecycle1 == lifecycle_data{.constructs = 1});
+                test_assert(lifecycle2 == lifecycle_data{.constructs = 1});
+            }
+            test_assert(lifecycle1 == lifecycle_data{.constructs = 1, .destructs = 1});
+            test_assert(lifecycle2 == lifecycle_data{.constructs = 1, .destructs = 1});
+        }();
+    };
+
+    test_case("constexpr_unique_ptr move construct") = [] {
+        []() consteval {
+            lifecycle_data lifecycle;
+            {
+                auto const o = new lifecycle_observer<int>{lifecycle, 42};
+                detail::constexpr_unique_ptr<lifecycle_observer<int>> pointer1{o};
+                test_assert(pointer1.get() == o);
+                test_assert(lifecycle == lifecycle_data{.constructs = 1});
+                detail::constexpr_unique_ptr<lifecycle_observer<int>> pointer2{std::move(pointer1)};
+                test_assert(lifecycle == lifecycle_data{.constructs = 1});
+            }
+            test_assert(lifecycle == lifecycle_data{.constructs = 1, .destructs = 1});
+        }();
+    };
+
+    test_case("constexpr_unique_ptr move assign") = [] {
+        []() consteval {
+            lifecycle_data lifecycle1;
+            lifecycle_data lifecycle2;
+            {
+                auto const o1 = new lifecycle_observer<int>{lifecycle1, 42};
+                detail::constexpr_unique_ptr<lifecycle_observer<int>> pointer1{o1};
+                test_assert(lifecycle1 == lifecycle_data{.constructs = 1});
+                auto const o2 = new lifecycle_observer<int>{lifecycle2, 583};
+                detail::constexpr_unique_ptr<lifecycle_observer<int>> pointer2{o2};
+                test_assert(lifecycle2 == lifecycle_data{.constructs = 1});
+                pointer1 = std::move(pointer2);
+                test_assert(pointer1.get() == o2);
+                test_assert(pointer1.operator->() == o2);
+                test_assert((*pointer1).value == 583);
+                test_assert(lifecycle1 == lifecycle_data{.constructs = 1, .destructs = 1});
+            }
+            test_assert(lifecycle1 == lifecycle_data{.constructs = 1, .destructs = 1});
+            test_assert(lifecycle2 == lifecycle_data{.constructs = 1, .destructs = 1});
+        }();
+    };
+
+    test_case("constexpr_unique_ptr reset() nullptr") = [] {
+        []() consteval {
+            lifecycle_data lifecycle;
+            {
+                auto const o = new lifecycle_observer<int>{lifecycle, 42};
+                detail::constexpr_unique_ptr<lifecycle_observer<int>> pointer{o};
+                test_assert(lifecycle == lifecycle_data{.constructs = 1});
+                pointer.reset();
+                test_assert(pointer.get() == nullptr);
+                test_assert(pointer.operator->() == nullptr);
+                test_assert(!pointer);
+                test_assert(lifecycle == lifecycle_data{.constructs = 1, .destructs = 1});
+            }
+            test_assert(lifecycle == lifecycle_data{.constructs = 1, .destructs = 1});
+        }();
+    };
+
+    test_case("constexpr_unique_ptr reset() new object") = [] {
+        []() consteval {
+            lifecycle_data lifecycle1;
+            lifecycle_data lifecycle2;
+            {
+                auto const o1 = new lifecycle_observer<int>{lifecycle1, 42};
+                detail::constexpr_unique_ptr<lifecycle_observer<int>> pointer{o1};
+                test_assert(lifecycle1 == lifecycle_data{.constructs = 1});
+                auto const o2 = new lifecycle_observer<int>{lifecycle2, 583};
+                pointer.reset(o2);
+                test_assert(pointer.get() == o2);
+                test_assert(pointer.operator->() == o2);
+                test_assert((*pointer).value == 583);
+                test_assert(lifecycle1 == lifecycle_data{.constructs = 1, .destructs = 1});
+                test_assert(lifecycle2 == lifecycle_data{.constructs = 1});
+            }
+            test_assert(lifecycle1 == lifecycle_data{.constructs = 1, .destructs = 1});
+            test_assert(lifecycle2 == lifecycle_data{.constructs = 1, .destructs = 1});
+        }();
+    };
+
+
+    static_assert(!detail::small_any<3, 8, mock_small_any_visitor<std::uint64_t>>::can_contain<std::uint64_t>());
+    static_assert(!detail::small_any<8, 1, mock_small_any_visitor<std::uint64_t>>::can_contain<std::uint64_t>());
+    static_assert(detail::small_any<8, 8, mock_small_any_visitor<std::uint64_t>>::can_contain<std::uint64_t>());
 
     test_case("small_any emplace() args") = [] {
         using value_type = lifecycle_observer<int>;

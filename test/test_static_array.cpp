@@ -1,70 +1,70 @@
 #include <algorithm>
 #include <array>
+#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <stdexcept>
+#include <vector>
 
-#include <serialpp/buffer.hpp>
+#include <serialpp/buffers.hpp>
 #include <serialpp/common.hpp>
 #include <serialpp/scalar.hpp>
 #include <serialpp/static_array.hpp>
 
-#include "helpers/common.hpp"
+#include "helpers/buffer_utility.hpp"
+#include "helpers/mock_serialisable.hpp"
 #include "helpers/test.hpp"
 
 
 namespace serialpp::test {
 test_block static_array_tests = [] {
 
-    static_assert(fixed_data_size_v<static_array<std::int32_t, 17>> == 68);
-    static_assert(fixed_data_size_v<static_array<std::uint64_t, 0>> == 0);
+    static_assert(fixed_size_serialisable<static_array<mock_serialisable<345, false>, 73>>);
+    static_assert(fixed_size_serialisable<static_array<mock_serialisable<10, true>, 0>>);
+    static_assert(variable_size_serialisable<static_array<mock_serialisable<12, true>, 3>>);
+    static_assert(fixed_data_size_v<static_array<mock_serialisable<4>, 17>> == 68);
+    static_assert(fixed_data_size_v<static_array<mock_serialisable<8>, 0>> == 0);
+
+    static_assert(std::semiregular<serialise_source<static_array<std::int32_t, 0>>>);
+    static_assert(std::semiregular<serialise_source<static_array<std::int32_t, 5>>>);
 
     test_case("serialiser static_array empty") = [] {
         using type = static_array<std::uint64_t, 0>;
-        basic_serialise_buffer buffer;
-        serialise_target<basic_serialise_buffer<>> const target = initialise_buffer<type>(buffer);
+        basic_buffer buffer;
+        buffer.initialise(0);
         serialise_source<type> const source;
-        serialiser<type> const ser;
-        serialise_target<basic_serialise_buffer<>> const new_target = ser(source, target);
+        serialiser<type>::serialise(source, buffer, 0);
 
-        serialise_target const expected_new_target{buffer, 0, 0, 0, 0};
-        test_assert(new_target == expected_new_target);
         std::array<unsigned char, 0> const expected_buffer{};
         test_assert(buffer_equal(buffer, expected_buffer));
     };
 
     test_case("serialiser static_array mock nonempty") = [] {
         using type = static_array<mock_serialisable<6>, 5>;
-        basic_serialise_buffer buffer;
-        serialise_target<basic_serialise_buffer<>> const target = initialise_buffer<type>(buffer);
+        basic_buffer buffer;
+        buffer.initialise(30);
         serialise_source<type> const source;
-        serialiser<type> const ser;
-        serialise_target<basic_serialise_buffer<>> const new_target = ser(source, target);
+        serialiser<type>::serialise(source, buffer, 0);
 
-        serialise_target const expected_new_target{buffer, 30, 30, 0, 30};
-        test_assert(new_target == expected_new_target);
-        test_assert(source.elements[0].targets.size() == 1);
-        test_assert(source.elements[0].targets.at(0) == serialise_target{buffer, 30, 0, 6, 30});
-        test_assert(source.elements[1].targets.size() == 1);
-        test_assert(source.elements[1].targets.at(0) == serialise_target{buffer, 30, 6, 6, 30});
-        test_assert(source.elements[2].targets.size() == 1);
-        test_assert(source.elements[2].targets.at(0) == serialise_target{buffer, 30, 12, 6, 30});
-        test_assert(source.elements[3].targets.size() == 1);
-        test_assert(source.elements[3].targets.at(0) == serialise_target{buffer, 30, 18, 6, 30});
-        test_assert(source.elements[4].targets.size() == 1);
-        test_assert(source.elements[4].targets.at(0) == serialise_target{buffer, 30, 24, 6, 30});
+        test_assert(source.elements[0].buffers == std::vector{&buffer});
+        test_assert(source.elements[0].fixed_offsets == std::vector<std::size_t>{0});
+        test_assert(source.elements[1].buffers == std::vector{&buffer});
+        test_assert(source.elements[1].fixed_offsets == std::vector<std::size_t>{6});
+        test_assert(source.elements[2].buffers == std::vector{&buffer});
+        test_assert(source.elements[2].fixed_offsets == std::vector<std::size_t>{12});
+        test_assert(source.elements[3].buffers == std::vector{&buffer});
+        test_assert(source.elements[3].fixed_offsets == std::vector<std::size_t>{18});
+        test_assert(source.elements[4].buffers == std::vector{&buffer});
+        test_assert(source.elements[4].fixed_offsets == std::vector<std::size_t>{24});
     };
 
     test_case("serialiser static_array scalar nonempty") = [] {
         using type = static_array<std::uint16_t, 5>;
-        basic_serialise_buffer buffer;
-        serialise_target<basic_serialise_buffer<>> const target = initialise_buffer<type>(buffer);
+        basic_buffer buffer;
+        buffer.initialise(10);
         serialise_source<type> const source{12, 45, 465, 24643, 674};
-        serialiser<type> const ser;
-        serialise_target<basic_serialise_buffer<>> const new_target = ser(source, target);
+        serialiser<type>::serialise(source, buffer, 0);
 
-        serialise_target const expected_new_target{buffer, 10, 10, 0, 10};
-        test_assert(new_target == expected_new_target);
         std::array<unsigned char, 10> const expected_buffer{
             0x0C, 0x00,     // element 0
             0x2D, 0x00,     // element 1
@@ -78,7 +78,7 @@ test_block static_array_tests = [] {
     test_case("deserialiser static_array empty") = [] {
         std::array<unsigned char, 0> const buffer{};
         using type = static_array<char, 0>;
-        deserialiser<type> const deser = deserialise<type>(as_const_bytes_span(buffer));
+        deserialiser<type> const deser{as_const_bytes_span(buffer), 0};
         test_assert(deser.size() == 0);
         test_assert(deser.elements().empty());
         for (std::size_t i = 0; i < 100; ++i) {
@@ -91,15 +91,15 @@ test_block static_array_tests = [] {
     test_case("deserialiser static_array mock nonempty") = [] {
         std::array<std::byte, 550> const buffer{};
         using type = static_array<mock_serialisable<135>, 4>;
-        deserialiser<type> const deser = deserialise<type>(buffer);
-        test_assert(bytes_view_same(deser.get<0>()._fixed_data, const_bytes_span{buffer.data(), 135}));
-        test_assert(bytes_view_same(deser.get<0>()._variable_data, const_bytes_span{buffer.data() + 540, 10}));
-        test_assert(bytes_view_same(deser.get<1>()._fixed_data, const_bytes_span{buffer.data() + 135, 135}));
-        test_assert(bytes_view_same(deser.get<1>()._variable_data, const_bytes_span{buffer.data() + 540, 10}));
-        test_assert(bytes_view_same(deser.get<2>()._fixed_data, const_bytes_span{buffer.data() + 270, 135}));
-        test_assert(bytes_view_same(deser.get<2>()._variable_data, const_bytes_span{buffer.data() + 540, 10}));
-        test_assert(bytes_view_same(deser.get<3>()._fixed_data, const_bytes_span{buffer.data() + 405, 135}));
-        test_assert(bytes_view_same(deser.get<3>()._variable_data, const_bytes_span{buffer.data() + 540, 10}));
+        deserialiser<type> const deser{const_bytes_span{buffer}, 0};
+        test_assert(bytes_span_same(deser.get<0>()._buffer, const_bytes_span{buffer}));
+        test_assert(deser.get<0>()._fixed_offset == 0);
+        test_assert(bytes_span_same(deser.get<1>()._buffer, const_bytes_span{buffer}));
+        test_assert(deser.get<1>()._fixed_offset == 135);
+        test_assert(bytes_span_same(deser.get<2>()._buffer, const_bytes_span{buffer}));
+        test_assert(deser.get<2>()._fixed_offset == 270);
+        test_assert(bytes_span_same(deser.get<3>()._buffer, const_bytes_span{buffer}));
+        test_assert(deser.get<3>()._fixed_offset == 405);
     };
 
     test_case("deserialiser static_array scalar nonempty") = [] {
@@ -109,7 +109,7 @@ test_block static_array_tests = [] {
             0x01, 0x00, 0x00, 0x32      // element 2
         };
         using type = static_array<std::int32_t, 3>;
-        deserialiser<type> const deser = deserialise<type>(as_const_bytes_span(buffer));
+        deserialiser<type> const deser{as_const_bytes_span(buffer), 0};
         test_assert(deser.size() == 3);
         std::array<std::int32_t, 3> const expected_elements{1'170'411'248, -1'630'057'274, 838'860'801};
         test_assert(std::ranges::equal(deser.elements(), expected_elements));

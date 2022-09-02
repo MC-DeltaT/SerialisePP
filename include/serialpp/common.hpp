@@ -13,7 +13,6 @@
 #include <typeinfo>
 #include <type_traits>
 #include <utility>
-#include <vector>
 
 #include "utility.hpp"
 
@@ -27,8 +26,25 @@ namespace serialpp {
     using mutable_bytes_span = std::span<std::byte>;
 
 
-    // Used for variable data offsets.
     using data_offset_t = std::uint32_t;
+
+
+    // A container of bytes which data can be serialised into.
+    // It requires:
+    //   - initialise(size) member function which initialises the buffer for a new serialisation. size is the number of
+    //       bytes required in the buffer up-front. Returns the new value of span().
+    //   - extend(count) member function which extends the current buffer by count bytes, keeping the previous content.
+    //       Returns the new value of span().
+    //   - span() member function which returns an std::span of the buffer for the current serialisation. This span may
+    //       be invalidated by calls to initialise() or extend().
+    // Throughout this library, it's assumed that serialise_buffer types are not views - i.e. they are not required to
+    // be movable or copyable, and are always passed by reference.
+    template<typename T>
+    concept serialise_buffer = requires(T& t, std::size_t const size) {
+        { t.initialise(size) } -> std::same_as<mutable_bytes_span>;
+        { t.extend(size) } -> std::same_as<mutable_bytes_span>;
+        { t.span() } noexcept -> std::same_as<mutable_bytes_span>;
+    };
 
 
     // The size in bytes of the fixed data section of a serialisable type (as an std::integral_constant).
@@ -37,37 +53,49 @@ namespace serialpp {
 
     // The size in bytes of the fixed data section of a serialisable type.
     template<typename T>
-    static inline constexpr std::size_t fixed_data_size_v = fixed_data_size<T>::value;
-
-
-    // Converts value to their bytes representations.
-    template<typename T>
-    struct serialiser;
-
-
-    // Converts bytes representations to C++ values.
-    template<typename T>
-    class deserialiser;
+    inline constexpr std::size_t fixed_data_size_v = fixed_data_size<T>::value;
 
 
     // Container/generator for a value to be serialised.
+    // Can contain whatever data you want.
+    // Should be movable for maximum usability and integration with Serialise++ (not strictly required, though).
     template<typename T>
     class serialise_source;
 
 
-    // A container of bytes which data can be serialised into.
-    // It requires:
-    //   - span() member function which returns an std::span of the current content.
-    //   - initialise(size) member function which initialises the buffer to a specified size.
-    //   - extend(count) member function which extends the current buffer by count bytes, without discarding the
-    //       previous content.
+    // Converts value to their bytes representations.
     template<typename T>
-    concept serialise_buffer = requires (T t, T const t_const) {
-        { t.span() } -> std::same_as<mutable_bytes_span>;
-        { t_const.span() } -> std::same_as<const_bytes_span>;
-        t.initialise(std::declval<std::size_t>());
-        t.extend(std::declval<std::size_t>());
+    struct serialiser {
+        // Converts the value in source to bytes and stores them in buffer.
+        // fixed_offset specifies the offset from the beginning of buffer to a section of size fixed_data_size_v<T>
+        // where the value's fixed data is to be written. This section is to be allocated by the caller.
+        // The serialiser need not check if fixed_offset is valid, i.e. the caller must ensure:
+        //   (fixed_offset + fixed_data_size_v<T>) <= buffer.span().size()
+        static void serialise(serialise_source<T> const& source, serialise_buffer auto& buffer,
+                std::size_t fixed_offset) = delete;
+
+        // An optional overload for types which don't use variable data.
+        static void serialise(serialise_source<T> const& source, mutable_bytes_span buffer, std::size_t fixed_offset)
+                = delete;
     };
+
+
+    // Converts bytes representations to values.
+    template<typename T>
+    class deserialiser {
+    public:
+        // buffer is the full bytes buffer.
+        // fixed_offset is the index in buffer at which this value's fixed data begins.
+        // The deserialiser need not check if fixed_offset is valid, i.e. the caller must ensure:
+        //   (fixed_offset + fixed_data_size_v<T>) <= buffer.size()
+        deserialiser(const_bytes_span buffer, std::size_t fixed_offset) = delete;
+    };
+
+
+    // Specialising to true enables automatic deserialisation of T.
+    // If enabled, the deserialiser must have a value() member function.
+    template<typename T>
+    inline constexpr bool enable_auto_deserialise = false;
 
 
     namespace detail {
@@ -75,241 +103,120 @@ namespace serialpp {
         // Archetype implementation of serialise_buffer.
         // Only exists for concept checking, don't use anywhere else!
         struct serialise_buffer_archetype {
-            mutable_bytes_span span();
-            const_bytes_span span() const;
-            void initialise(std::size_t);
-            void extend(std::size_t);
+            serialise_buffer_archetype() = delete;
+            serialise_buffer_archetype(serialise_buffer_archetype&&) = delete;
+            serialise_buffer_archetype(serialise_buffer_archetype const&) = delete;
+            ~serialise_buffer_archetype() = delete;
+
+            serialise_buffer_archetype& operator=(serialise_buffer_archetype&&) = delete;
+            serialise_buffer_archetype& operator=(serialise_buffer_archetype const&) = delete;
+
+            mutable_bytes_span initialise(std::size_t);
+            mutable_bytes_span extend(std::size_t);
+            mutable_bytes_span span() noexcept;
         };
 
     }
-
-
-    template<serialise_buffer Buffer>
-    class serialise_target;
-
-
-    // Specifies to a deserialiser constructor to skip checking the size of its fixed data buffer, e.g. because it is
-    // part of a parent object that's already checked the size.
-    struct no_fixed_buffer_check_t {};
-
-    static inline constexpr no_fixed_buffer_check_t no_fixed_buffer_check{};
 
 
     template<typename T>
-    concept serialisable = requires {
+    concept serialisable = requires(serialise_source<T> const source, detail::serialise_buffer_archetype buffer,
+            std::size_t const fixed_offset) {
         { fixed_data_size<T>::value } -> std::same_as<std::size_t const&>;
-        requires std::default_initializable<serialiser<T>>;
-        requires detail::function<
-            serialiser<T>,
-            serialise_target<detail::serialise_buffer_archetype>,
-            serialise_source<T>, serialise_target<detail::serialise_buffer_archetype>>;
-        requires std::constructible_from<deserialiser<T>, const_bytes_span, const_bytes_span>;
-        requires std::constructible_from<deserialiser<T>, no_fixed_buffer_check_t, const_bytes_span, const_bytes_span>;
+        serialiser<T>::serialise(source, buffer, fixed_offset);
+        requires std::constructible_from<deserialiser<T>, const_bytes_span const&, std::size_t const&>;
+        { enable_auto_deserialise<T> } -> std::same_as<bool const&>;
     };
 
-
-    // Helper for serialising into a serialise_buffer.
-    // Keeps track of positions in the buffer which the current subobject should be serialised into (i.e. for complex
-    // types).
-    template<serialise_buffer Buffer>
-    class serialise_target {
-    public:
-        struct push_fixed_subobject_context {
-            std::size_t subobject_fixed_offset;
-            std::size_t subobject_fixed_size;
-            std::size_t new_subobject_fixed_size;
-
-            [[nodiscard]]
-            friend constexpr bool operator==(push_fixed_subobject_context const&, push_fixed_subobject_context const&)
-                noexcept = default;
+    // Serialisable type which never uses any variable data.
+    template<typename T>
+    concept fixed_size_serialisable =
+        serialisable<T>
+        && requires(serialise_source<T> const source, mutable_bytes_span const buffer, std::size_t const fixed_offset) {
+            serialiser<T>::serialise(source, buffer, fixed_offset);
         };
 
-        struct push_variable_subobjects_context {
-            std::size_t root_fixed_size;
-            std::size_t subobject_fixed_offset;
-            std::size_t subobject_fixed_size;
+    // Serialisable type which may use variable data.
+    template<typename T>
+    concept variable_size_serialisable = serialisable<T> && !fixed_size_serialisable<T>;
 
-            [[nodiscard]]
-            friend constexpr bool operator==(
-                push_variable_subobjects_context const&, push_variable_subobjects_context const&) noexcept = default;
-        };
 
-        constexpr serialise_target(Buffer& buffer, std::size_t root_fixed_size, std::size_t subobject_fixed_offset,
-                std::size_t subobject_fixed_size, std::size_t subobject_variable_offset) :
-            _buffer{&buffer}, _root_fixed_size{root_fixed_size}, _subobject_fixed_offset{subobject_fixed_offset},
-            _subobject_fixed_size{subobject_fixed_size}, _subobject_variable_offset{subobject_variable_offset}
-        {
-            assert(_root_fixed_size <= _buffer->span().size());
-            assert(_subobject_fixed_offset + _subobject_fixed_size <= _buffer->span().size());
-            assert(_subobject_variable_offset >= _root_fixed_size);
-            assert(_subobject_variable_offset <= _buffer->span().size());
-        }
+    // A buffer with which serialiser<T> can be invoked.
+    // Either a type which satisfies serialise_buffer, or if T satisfies fixed_size_serialisable, mutable_bytes_span.
+    template<typename B, typename T>
+    concept buffer_for =
+        (serialisable<T> && serialise_buffer<B>)
+        || (fixed_size_serialisable<T> && std::same_as<std::remove_cvref_t<B>, mutable_bytes_span>);
 
-        // Gets the buffer for the current subobject's fixed data.
-        [[nodiscard]]
-        constexpr mutable_bytes_span subobject_fixed_data() const {
-            assert(_subobject_fixed_offset + _subobject_fixed_size <= _buffer->span().size());
-            return _buffer->span().subspan(_subobject_fixed_offset).first(_subobject_fixed_size);
-        }
 
-        // Gets the offset of the current subobject's variable data relative to the end of the fixed data.
-        [[nodiscard]]
-        constexpr std::size_t relative_subobject_variable_offset() const {
-            assert(_subobject_variable_offset >= _root_fixed_size);
-            return _subobject_variable_offset - _root_fixed_size;
-        }
+    namespace detail {
 
-        // Sets up a serialise_target for a subobject of type T in the fixed data section.
-        // This function conceptually "enters" the serialisation of the subobject.
-        // When you're done serialising the subobject, you must call exit_fixed_subobject() with the returned
-        // push_fixed_subobject_context instance to obtain a serialise_target ready for the next serialisation.
         template<serialisable T>
-        [[nodiscard]]
-        constexpr std::pair<serialise_target, push_fixed_subobject_context> enter_fixed_subobject() const {
-            constexpr auto subobject_fixed_size = fixed_data_size_v<T>;
+        struct deserialise_type : std::type_identity<deserialiser<T>> {};
 
-            push_fixed_subobject_context const context{
-                _subobject_fixed_offset, _subobject_fixed_size, subobject_fixed_size};
+        template<serialisable T> requires enable_auto_deserialise<T>
+        struct deserialise_type<T> : std::decay<decltype(std::declval<deserialiser<T> const&>().value())> {};
 
-            auto target = *this;
-            target._subobject_fixed_size = subobject_fixed_size;
-
-            return {target, context};
-        }
-
-        // "Exits" the serialisation of a subobject previously set up by enter_fixed_subobject().
-        [[nodiscard]]
-        constexpr serialise_target exit_fixed_subobject(push_fixed_subobject_context context) const {
-            // Recalculate exact fixed offset and size to avoid changing it multiple times for the same subobject when
-            // nesting push_fixed_subobject() calls.
-            auto target = *this;
-            target._subobject_fixed_offset = context.subobject_fixed_offset + context.new_subobject_fixed_size;
-            assert(context.subobject_fixed_size >= context.new_subobject_fixed_size);
-            target._subobject_fixed_size = context.subobject_fixed_size - context.new_subobject_fixed_size;
-            return target;
-        }
-
-        // Convenience function for calling enter_fixed_subobject(), invoking func with the serialise_target, then
-        // calling exit_fixed_subobject().
-        template<serialisable T, detail::function<serialise_target, serialise_target> F>
-        [[nodiscard]]
-        constexpr serialise_target push_fixed_subobject(F&& func) const {
-            auto const [target, context] = enter_fixed_subobject<T>();
-            auto const new_target = std::invoke(std::forward<F>(func), target);
-            return new_target.exit_fixed_subobject(context);
-        }
-
-        // Sets up serialise_target for count consecutive subobjects of type T in the variable data section.
-        // This function conceptually "enters" the serialisation of the subobject.
-        // When you're done serialising the subobject, you must call exit_variable_subobjects() with the returned
-        // push_variable_subobjects_context instance to obtain a serialise_target ready for the next serialisation.
-        // If you are putting multiple subobjects into the variable data section, then you should use a single call to
-        // this function to do so, so that the subobjects' fixed data is allocated together (e.g. for dynamic_array).
-        // Otherwise, if the subobjects allocate variable data, it will go inbetween the fixed data, and you won't know
-        // where each subobject starts.
-        template<serialisable T>
-        [[nodiscard]]
-        constexpr std::pair<serialise_target, push_variable_subobjects_context> enter_variable_subobjects(
-                std::size_t count) const {
-            auto const subobjects_fixed_size = fixed_data_size_v<T> * count;
-
-            // Assume the buffer doesn't already have empty space at the end.
-            // We could check for empty space but I don't think it will occur in any normal use cases.
-            _buffer->extend(subobjects_fixed_size);
-
-            push_variable_subobjects_context const context{
-                _root_fixed_size, _subobject_fixed_offset, _subobject_fixed_size};
-
-            auto target = *this;
-            target._subobject_fixed_offset = _subobject_variable_offset;
-            target._subobject_fixed_size = subobjects_fixed_size;
-            target._subobject_variable_offset = _subobject_variable_offset + subobjects_fixed_size;
-
-            return {target, context};
-        }
-
-        // "Exits" the serialisation of a subobjects previously set up by enter_variable_subobjects().
-        [[nodiscard]]
-        constexpr serialise_target exit_variable_subobjects(push_variable_subobjects_context context) const {
-            // All subobject data went into the variable data section and not the fixed data section, so we revert the
-            // fixed section but keep the new variable section.
-            auto target = *this;
-            target._root_fixed_size = context.root_fixed_size;
-            target._subobject_fixed_offset = context.subobject_fixed_offset;
-            target._subobject_fixed_size = context.subobject_fixed_size;
-            return target;
-        }
-
-        // Convenience function for calling enter_variable_subobjects(), invoking func with the serialise_target, then
-        // calling exit_variable_subobjects().
-        template<serialisable T, detail::function<serialise_target, serialise_target> F>
-        [[nodiscard]]
-        constexpr serialise_target push_variable_subobjects(std::size_t count, F&& func) const {
-            auto const [target, context] = enter_variable_subobjects<T>(count);
-            auto const new_target = std::invoke(std::forward<F>(func), target);
-            return new_target.exit_variable_subobjects(context);
-        }
-
-        [[nodiscard]]
-        friend constexpr bool operator==(serialise_target const&, serialise_target const&) noexcept = default;
-
-    private:
-        Buffer* _buffer;
-        std::size_t _root_fixed_size;           // Size of fixed data section.
-        std::size_t _subobject_fixed_offset;    // Offset of current subobject's fixed data from start of buffer.
-        std::size_t _subobject_fixed_size;		// Size of current subobject's fixed data.
-        std::size_t _subobject_variable_offset;	// Offset of current subobject's variable data from start of buffer.
-    };
-
-
-    // Initialises buffer for a type T, and returns a serialise_target set up to serialise T.
-    template<serialisable T, serialise_buffer Buffer>
-    constexpr serialise_target<Buffer> initialise_buffer(Buffer& buffer) {
-        constexpr auto fixed_size = fixed_data_size_v<T>;
-        buffer.initialise(fixed_size);
-        return {buffer, fixed_size, 0, fixed_size, fixed_size};
     }
 
 
-    // Thrown when an object is too large to serialise.
-    class object_size_error : public std::length_error {
+    // Gets the type resulting from deserialisation.
+    // If T doesn't enable automatic deserialisation, the type is just deserialiser<T>.
+    // If T does enable automatic deserialisation, the type is the return type of the deserialiser's value() function.
+    template<serialisable T>
+    using deserialise_t = detail::deserialise_type<T>::type;
+
+
+    // Base for exceptions relating to serialisation.
+    class serialise_error : public std::exception {
     public:
-        using std::length_error::length_error;
+        virtual ~serialise_error() = 0;
+    };
+
+    inline serialise_error::~serialise_error() = default;
+
+
+    // Thrown when an object is too large to serialise.
+    class object_size_error : public serialise_error {
+    public:
+        object_size_error(std::string message) noexcept :
+            _message{std::move(message)}
+        {}
+
+        [[nodiscard]]
+        char const* what() const noexcept override {
+            return _message.c_str();
+        }
+
+    private:
+        std::string _message;
     };
 
 
-    class deserialise_error : public std::runtime_error {
+    // Base for exceptions relating to deserialisation.
+    class deserialise_error : public std::exception {
     public:
-        using runtime_error::runtime_error;
-
-        ~deserialise_error() = 0;
+        virtual ~deserialise_error() = 0;
     };
 
     inline deserialise_error::~deserialise_error() = default;
 
 
-    // Indicates when a bytes buffer is the wrong size to deserialise the requested type.
-    class buffer_size_error : public deserialise_error {
+    // Thrown when deserialisation would require out-of-bounds buffer access.
+    // This can occur if the buffer is too small or a variable data offset is invalid.
+    class buffer_bounds_error : public deserialise_error {
     public:
-        using deserialise_error::deserialise_error;
+        buffer_bounds_error(std::string message) noexcept :
+            _message{std::move(message)}
+        {}
 
-        ~buffer_size_error() = 0;
-    };
+        [[nodiscard]]
+        char const* what() const noexcept override {
+            return _message.c_str();
+        }
 
-    inline buffer_size_error::~buffer_size_error() = default;
-
-
-    // Indicates when the fixed data buffer is the wrong size to deserialise the required type.
-    class fixed_buffer_size_error : public buffer_size_error {
-    public:
-        using buffer_size_error::buffer_size_error;
-    };
-
-
-    // Indicates when the variable data buffer is the wrong size to deserialise the required type.
-    class variable_buffer_size_error : public buffer_size_error {
-    public:
-        using buffer_size_error::buffer_size_error;
+    private:
+        std::string _message;
     };
 
 
@@ -318,61 +225,104 @@ namespace serialpp {
         // Safely casts to data_offset_t. Throws object_size_error if the value is too big to be stored in a
         // data_offset_t.
         [[nodiscard]]
-        constexpr data_offset_t to_data_offset(std::size_t offset) {
+        constexpr data_offset_t to_data_offset(std::size_t const offset) {
             if (std::cmp_less_equal(offset, std::numeric_limits<data_offset_t>::max())) {
                 return static_cast<data_offset_t>(offset);
             }
             else {
-                throw object_size_error{std::format("Variable data offset {} is too big to be represented", offset)};
+                throw object_size_error{std::format("Data offset {} is too big to be represented", offset)};
+            }
+        }
+
+
+        // Throws buffer_bounds_error if buffer is too small to contain an instance of T starting at the specified
+        // offset.
+        template<serialisable T>
+        constexpr void check_buffer_size_for(const_bytes_span const buffer, std::size_t const offset) {
+            if (offset > buffer.size() || buffer.size() - offset < fixed_data_size_v<T>) {
+                throw buffer_bounds_error{
+                    std::format(
+                        "Data buffer of size {} is too small to deserialise type {} with fixed size {} at offset {}",
+                        buffer.size(), typeid(T).name(), fixed_data_size_v<T>, offset)};
             }
         }
 
     }
 
 
-    // Throws buffer_size_error if buffer is too small to contain an instance of T.
-    template<serialisable T>
-    constexpr void check_fixed_buffer_size(const_bytes_span buffer) {
-        if (buffer.size() < fixed_data_size_v<T>) {
-            throw fixed_buffer_size_error{
-                std::format("Fixed data buffer of size {} is too small to deserialise type {} with fixed size {}",
-                    buffer.size(), typeid(T).name(), fixed_data_size_v<T>)};
-        }
+    // Invokes func with the common optimal buffer type for Ts.
+    // Extracting buffer.span() high in the tree of serialiser calls for fixed_size_serialisable types helps the
+    // compiler generate the most optimised machine code.
+    template<serialisable... Ts, serialise_buffer B, std::invocable<B&> F>
+        requires (variable_size_serialisable<Ts> || ...)
+    constexpr decltype(auto) with_buffer_for(B& buffer, F&& func) noexcept(std::is_nothrow_invocable_v<F, B&>) {
+        return std::invoke(std::forward<F>(func), buffer);
+    }
+
+    template<fixed_size_serialisable... Ts, serialise_buffer B, std::invocable<mutable_bytes_span const&> F>
+    constexpr decltype(auto) with_buffer_for(B& buffer, F&& func)
+            noexcept(std::is_nothrow_invocable_v<F, mutable_bytes_span const&>) {
+        auto const buffer_span = buffer.span();
+        return std::invoke(std::forward<F>(func), buffer_span);
+    }
+
+    template<fixed_size_serialisable... Ts, std::invocable<mutable_bytes_span const&> F>
+    constexpr decltype(auto) with_buffer_for(mutable_bytes_span const buffer, F&& func)
+            noexcept(std::is_nothrow_invocable_v<F, mutable_bytes_span const&>) {
+        return std::invoke(std::forward<F>(func), buffer);
+    }
+
+
+    // Invokes func with a fixed offset set up for a subobject of type T in the fixed data section.
+    // Returns a fixed offset ready for the next serialisation.
+    template<serialisable T, std::invocable<std::size_t const&> F>
+    [[nodiscard]]
+    constexpr std::size_t push_fixed_subobject(std::size_t const fixed_offset, F&& func)
+            noexcept(std::is_nothrow_invocable_v<F, std::size_t const&>) {
+        std::invoke(std::forward<F>(func), fixed_offset);
+        // Recalculate the fixed offset to avoid changing it multiple times for the same subobject when nesting
+        // push_fixed_subobject() calls.
+        auto const next_fixed_offset = fixed_offset + fixed_data_size_v<T>;
+        return next_fixed_offset;
+    }
+
+    // Invokes func with a fixed offset set up for count consecutive subobjects of type T in the variable data section.
+    // If you are putting multiple subobjects into the variable data section, then you should use a single call to
+    // this function to do so, so that the subobjects' fixed data is allocated together (e.g. for dynamic_array).
+    // Otherwise, if the subobjects allocate variable data, it will go inbetween the fixed data, and you won't know
+    // where each subobject starts.
+    template<serialisable T, std::invocable<std::size_t const&> F>
+    constexpr void push_variable_subobjects(std::size_t const count, serialise_buffer auto& buffer, F&& func) {
+        // Assume the buffer doesn't have unused space at the end.
+        auto const subobject_fixed_offset = buffer.span().size();
+        buffer.extend(fixed_data_size_v<T> * count);
+
+        std::invoke(std::forward<F>(func), subobject_fixed_offset);
     }
 
 
     // Helper for implementing deserialiser.
     class deserialiser_base {
     public:
-        constexpr deserialiser_base(no_fixed_buffer_check_t, const_bytes_span fixed_data,
-                const_bytes_span variable_data) noexcept :
-            _fixed_data{fixed_data}, _variable_data{variable_data}
+        constexpr deserialiser_base(const_bytes_span const buffer, std::size_t const fixed_offset) :
+            _buffer{buffer}, _fixed_offset{fixed_offset}
         {}
 
     protected:
-        const_bytes_span _fixed_data;
-        const_bytes_span _variable_data;
+        const_bytes_span _buffer;
+        std::size_t _fixed_offset;
 
-        // Throws variable_buffer_size_error if offset is not within the bounds of the variable data buffer.
-        constexpr void _check_variable_offset(std::size_t offset) const {
-            if (offset >= _variable_data.size()) {
-                throw variable_buffer_size_error{
-                    std::format("Variable data buffer of size {} is too small for variable data offset {}",
-                        _variable_data.size(), offset)};
-            }
+        // Obtains a const_bytes_span of this object's fixed data.
+        constexpr const_bytes_span _fixed_data() const {
+            return _buffer.subspan(_fixed_offset);
         }
     };
 
 
-    // Specialising to true enables automatic deserialisation of T when requesting a T from a deserialiser for a
-    // compound type. If enabled, the deserialiser must have a value() member function.
-    template<serialisable T>
-    static inline constexpr bool enable_auto_deserialise = false;
-
-    // If enable_auto_deserialise<T> is true, then returns the deserialised value, otherwise returns deser unchanged.
+    // If enable_auto_deserialise<T> is true, then returns the deserialised value, otherwise just returns deser.
     template<serialisable T>
     [[nodiscard]]
-    constexpr decltype(auto) auto_deserialise(deserialiser<T> const& deser) {
+    constexpr deserialise_t<T> auto_deserialise(deserialiser<T> const& deser) {
         if constexpr (enable_auto_deserialise<T>) {
             return deser.value();
         }
@@ -381,29 +331,60 @@ namespace serialpp {
         }
     }
 
-    // Gets the type resulting from performing automatic deserialisation.
-    template<serialisable T>
-    using auto_deserialise_t =
-        std::remove_cvref_t<decltype(auto_deserialise(std::declval<deserialiser<T> const>()))>;
 
-
-    // Serialises an entire object.
+    // Invokes serialiser<T> with the optimal buffer for T.
     template<serialisable T>
-    constexpr void serialise(serialise_source<T> const& source, serialise_buffer auto& buffer) {
-        auto const target = initialise_buffer<T>(buffer);
-        serialiser<T>{}(source, target);
+    constexpr void serialise(serialise_source<T> const& source, buffer_for<T> auto&& buffer,
+            std::size_t const fixed_offset) {
+        // Explicit lambda return type is required here due to weirdness with value-dependence and instantiation during
+        // concept checking.
+        with_buffer_for<T>(buffer, [&source, fixed_offset](auto&& buffer) -> void {
+            if constexpr (fixed_size_serialisable<T>) {
+                // Without the explicit return type, this can get instantiated even if the "if constexpr" is false.
+                assert(fixed_offset <= buffer.size());
+            }
+            else {
+                assert(fixed_offset <= buffer.span().size());
+            }
+            serialiser<T>::serialise(source, buffer, fixed_offset);
+        });
     }
 
 
-    // Obtains a deserialiser for a type.
-    // buffer should contain exactly an instance of T (i.e. you can only use this function to deserialise the result of
-    // serialising an entire object via serialise()).
+    namespace detail {
+
+        // Partially applies serialise() with source and buffer, leaving the fixed offset argument unbound.
+        // Useful for push_fixed_subobject() and push_variable_subobjects().
+        template<serialisable T, buffer_for<T> B>
+            // Don't allow rvalue serialise_buffer, since in general lifetime won't be extended into lambda capture.
+            requires std::is_lvalue_reference_v<B> || std::same_as<std::remove_cvref_t<B>, mutable_bytes_span>
+        constexpr auto bind_serialise(serialise_source<T> const& source, B&& buffer) {
+            return [&source, &buffer](std::size_t const fixed_offset) {
+                serialise(source, buffer, fixed_offset);
+            };
+        }
+
+    }
+
+
+    // Initialises the buffer and serialises an entire object beginning from the start of the buffer.
+    template<serialisable T>
+    constexpr void serialise(serialise_source<T> const& source, serialise_buffer auto& buffer) {
+        buffer.initialise(fixed_data_size_v<T>);
+        serialise(source, buffer, 0);
+    }
+
+
+    // Deserialises a type from a buffer.
+    // buffer is the full bytes buffer.
+    // fixed_offset is the index in buffer at which this value's fixed data begins.
+    // Buffer bounds checking is performed.
     template<serialisable T>
     [[nodiscard]]
-    constexpr deserialiser<T> deserialise(const_bytes_span buffer) {
-        check_fixed_buffer_size<T>(buffer);
-        return deserialiser<T>{
-            no_fixed_buffer_check, buffer.first(fixed_data_size_v<T>), buffer.subspan(fixed_data_size_v<T>)};
+    constexpr deserialise_t<T> deserialise(const_bytes_span const buffer, std::size_t const fixed_offset = 0) {
+        detail::check_buffer_size_for<T>(buffer, fixed_offset);
+        deserialiser<T> const deser{buffer, fixed_offset};
+        return auto_deserialise(deser);
     }
 
 }
